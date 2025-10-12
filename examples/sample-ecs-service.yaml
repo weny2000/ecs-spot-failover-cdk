@@ -1,0 +1,83 @@
+# Sample ECS service configuration
+# This file demonstrates how to configure Spot and standard Fargate services
+
+# Spot service configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sample-app-spot-service
+data:
+  service-config: |
+    {
+      "serviceName": "sample-app",
+      "cluster": "fargate-spot-cluster",
+      "taskDefinition": "sample-app:1",
+      "desiredCount": 2,
+      "launchType": "FARGATE",
+      "capacityProviderStrategy": [
+        {
+          "capacityProvider": "FARGATE_SPOT",
+          "weight": 1
+        }
+      ],
+      "networkConfiguration": {
+        "awsvpcConfiguration": {
+          "subnets": ["subnet-xxx", "subnet-yyy"],
+          "securityGroups": ["sg-xxx"],
+          "assignPublicIp": "ENABLED"
+        }
+      },
+      "tags": [
+        {
+          "key": "Environment",
+          "value": "production"
+        },
+        {
+          "key": "ServiceType",
+          "value": "spot"
+        }
+      ]
+    }
+
+---
+# Standard Fargate service configuration (backup)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sample-app-standard-service
+data:
+  service-config: |
+    {
+      "serviceName": "sample-app-standard",
+      "cluster": "fargate-spot-cluster",
+      "taskDefinition": "sample-app:1",
+      "desiredCount": 0,
+      "launchType": "FARGATE",
+      "capacityProviderStrategy": [
+        {
+          "capacityProvider": "FARGATE",
+          "weight": 1
+        }
+      ],
+      "networkConfiguration": {
+        "awsvpcConfiguration": {
+          "subnets": ["subnet-xxx", "subnet-yyy"],
+          "securityGroups": ["sg-xxx"],
+          "assignPublicIp": "ENABLED"
+        }
+      },
+      "tags": [
+        {
+          "key": "Environment",
+          "value": "production"
+        },
+        {
+          "key": "ServiceType",
+          "value": "standard"
+        },
+        {
+          "key": "BackupFor",
+          "value": "sample-app"
+        }
+      ]
+    }
