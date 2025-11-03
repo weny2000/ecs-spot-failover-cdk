@@ -1,5 +1,13 @@
 # ECS Fargate Spot Failover System Architecture Overview
 
+## Background
+
+In large-scale IoT data processing systems, the backend continuously analyzes incoming files in real time. To sustain high throughput, it often runs up to 200 concurrent ECS tasks for parallel analytics. Because these workloads are long-running and highly parallel, optimizing operational costs becomes crucial.
+
+To reduce overall compute expenses, the system primarily utilizes Fargate Spot capacity providers for task execution. However, Spot resources may occasionally experience capacity shortages or AWS-side disruptions, resulting in failed task placements or prolonged Pending states.
+
+This architecture introduces an automated fallback mechanism that ensures system stability and cost-efficiency simultaneously.
+
 ## System Overview
 
 This system implements a fully automated Serverless architecture for monitoring the health status of ECS Fargate Spot instances and automatically switching to standard Fargate instances during consecutive failures, ensuring high availability of services.
@@ -285,3 +293,8 @@ Lambda functions use principle of least privilege:
 - On-demand scaling
 - Serverless architecture reduces management overhead
 - Event-driven response mechanism
+
+
+## Summary
+
+Plan provides a hybrid Spot + On-Demand architecture that ensures real-time IoT analytics systems remain stable during Spot shortages while achieving up to 50% cost reduction through intelligent fallback automation.
