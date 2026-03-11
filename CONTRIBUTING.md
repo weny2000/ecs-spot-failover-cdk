@@ -8,7 +8,7 @@ Thank you for your interest in contributing to this project! We welcome contribu
 
 If you find a bug or have a suggestion:
 
-1. Check if the issue already exists in the [issue tracker](https://github.com/yourusername/ecs-fargate-spot-failover/issues)
+1. Check if the issue already exists in the [issue tracker](https://github.com/weny2000/ecs-spot-failover-cdk/issues)
 2. If not, create a new issue with:
    - Clear title and description
    - Steps to reproduce (for bugs)
@@ -20,8 +20,8 @@ If you find a bug or have a suggestion:
 
 1. **Fork the repository**
    ```bash
-   git clone https://github.com/yourusername/ecs-fargate-spot-failover.git
-   cd ecs-fargate-spot-failover
+   git clone https://github.com/weny2000/ecs-spot-failover-cdk.git
+   cd ecs-spot-failover-cdk
    ```
 
 2. **Create a branch**
@@ -99,7 +99,7 @@ npm run deploy
 ### Project Structure
 
 ```
-ecs-fargate-spot-failover/
+ecs-spot-failover-cdk/
 ├── src/
 │   ├── app.ts                          # CDK app entry
 │   ├── ecs-fargate-spot-failover-stack.ts  # Main stack
@@ -247,7 +247,7 @@ Contributors will be recognized in:
 If you discover a security vulnerability:
 
 1. **DO NOT** open a public issue
-2. Email security@yourproject.com with details
+2. Email security@example.com with details
 3. Allow time for remediation before disclosure
 
 ## 📄 License

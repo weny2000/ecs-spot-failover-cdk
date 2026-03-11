@@ -1,0 +1,51 @@
+# Production Dockerfile for Python Application
+#
+# Features:
+# - Multi-stage build for smaller image
+# - Security-hardened
+# - Gunicorn WSGI server
+# - Health checks
+
+# ==========================================
+# Stage 1: Dependencies
+# ==========================================
+FROM python:3.11-alpine AS dependencies
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --user --no-cache-dir -r requirements.txt
+
+# ==========================================
+# Stage 2: Production
+# ==========================================
+FROM python:3.11-alpine AS production
+
+# Install runtime dependencies
+RUN apk --no-cache add wget ca-certificates && \
+    addgroup -g 1000 -S appgroup && \
+    adduser -u 1000 -S appuser -G appgroup
+
+WORKDIR /app
+
+# Copy Python dependencies from stage 1
+COPY --from=dependencies /root/.local /home/appuser/.local
+ENV PATH=/home/appuser/.local/bin:$PATH
+
+# Copy application code
+COPY --chown=appuser:appgroup . .
+
+# Switch to non-root user
+USER appuser
+
+EXPOSE 8080
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD wget -q --spider http://localhost:8080/health || exit 1
+
+LABEL maintainer="your-email@example.com" \
+      version="1.0.0" \
+      description="ECS Fargate Spot Sample Application (Python)"
+
+CMD ["python", "server.py"]

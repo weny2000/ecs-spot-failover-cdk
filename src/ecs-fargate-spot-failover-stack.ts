@@ -96,7 +96,7 @@ export class EcsFargateSpotFailoverStack extends cdk.Stack {
     });
 
     // Enable Fargate and Fargate Spot capacity providers
-    cluster.addCapacityProviderStrategy([
+    cluster.addDefaultCapacityProviderStrategy([
       {
         capacityProvider: 'FARGATE',
         weight: 1,
@@ -396,6 +396,29 @@ export class EcsFargateSpotFailoverStack extends cdk.Stack {
       tracing: lambda.Tracing.ACTIVE,
     });
 
+    // Lambda function: PENDING task monitor (proactive monitoring)
+    const pendingTaskMonitor = new lambda.Function(this, 'PendingTaskMonitor', {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: 'pending-task-monitor.handler',
+      code: lambda.Code.fromAsset('lib/lambda'),
+      role: lambdaExecutionRole,
+      environment: {
+        ERROR_COUNTER_TABLE: errorCounterTable.tableName,
+        NOTIFICATION_TOPIC_ARN: notificationTopic.topicArn,
+        CLUSTER_NAME: cluster.clusterName,
+        SPOT_SERVICE_NAME: createSampleApp ? this.spotService!.serviceName : 'sample-app',
+        FAILOVER_STATE_MACHINE_ARN: failoverStateMachine.stateMachineArn,
+        CLOUDWATCH_NAMESPACE: 'ECS/FargateSpotFailover',
+        PENDING_TASK_TIMEOUT_MINUTES: '5',
+        FAILURE_THRESHOLD: '3',
+        AWS_XRAY_TRACING_NAME: 'PendingTaskMonitor',
+      },
+      timeout: cdk.Duration.seconds(30),
+      memorySize: 256,
+      tracing: lambda.Tracing.ACTIVE,
+      description: 'Monitors ECS tasks stuck in PENDING state to detect Spot capacity issues proactively',
+    });
+
     // ==========================================
     // EventBridge Rules
     // ==========================================
@@ -435,6 +458,14 @@ export class EcsFargateSpotFailoverStack extends cdk.Stack {
     // Add Lambda functions as targets for EventBridge rules
     ecsTaskStateChangeRule.addTarget(new targets.LambdaFunction(spotErrorDetector));
     ecsTaskRunningRule.addTarget(new targets.LambdaFunction(spotSuccessMonitor));
+
+    // EventBridge scheduled rule for PENDING task monitoring (every 1 minute)
+    const pendingTaskCheckRule = new events.Rule(this, 'PendingTaskCheckRule', {
+      ruleName: 'ecs-spot-pending-check',
+      description: 'Periodically check for ECS tasks stuck in PENDING state',
+      schedule: events.Schedule.rate(cdk.Duration.minutes(1)),
+    });
+    pendingTaskCheckRule.addTarget(new targets.LambdaFunction(pendingTaskMonitor));
 
     // ==========================================
     // CloudWatch Dashboard
@@ -537,13 +568,13 @@ export class EcsFargateSpotFailoverStack extends cdk.Stack {
       this.loadBalancer = alb;
 
       // ALB Security Group
-      alb.addSecurityGroup(
-        new ec2.SecurityGroup(this, 'ALBSecurityGroup', {
-          vpc,
-          description: 'Security group for ALB',
-          allowAllOutbound: true,
-        }).addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(appPort), 'Allow HTTP traffic')
-      );
+      const albSecurityGroup = new ec2.SecurityGroup(this, 'ALBSecurityGroup', {
+        vpc,
+        description: 'Security group for ALB',
+        allowAllOutbound: true,
+      });
+      albSecurityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(appPort), 'Allow HTTP traffic');
+      alb.addSecurityGroup(albSecurityGroup);
 
       // Task Role for ECS Tasks
       const taskRole = new iam.Role(this, 'ECSTaskRole', {

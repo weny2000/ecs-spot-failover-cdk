@@ -1,0 +1,84 @@
+# Docker Compose for Local Testing
+# 
+# Usage:
+#   docker-compose up -d          # Start services
+#   docker-compose up -d --scale spot=2 standard=1  # Scale services
+#   docker-compose down           # Stop services
+#   docker-compose logs -f spot   # View logs
+#
+# Endpoints:
+#   - http://localhost:8080       # Main application
+#   - http://localhost:8080/health # Health check
+#   - http://localhost:8080/status # Detailed status
+
+version: '3.8'
+
+services:
+  # Fargate Spot simulation
+  spot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      # For production build, use:
+      # dockerfile: Dockerfile.production
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - SERVICE_NAME=sample-app-spot
+      - CAPACITY_PROVIDER=FARGATE_SPOT
+      - NODE_ENV=production
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+    networks:
+      - app-network
+
+  # Standard Fargate simulation (backup)
+  standard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8081:8080"
+    environment:
+      - PORT=8080
+      - SERVICE_NAME=sample-app-standard
+      - CAPACITY_PROVIDER=FARGATE
+      - NODE_ENV=production
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      replicas: 0  # Initially 0, simulating failover scenario
+    networks:
+      - app-network
+
+  # Load Balancer simulation (nginx)
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - spot
+    networks:
+      - app-network
+    profiles:
+      - with-lb  # Only start when using: docker-compose --profile with-lb up
+
+networks:
+  app-network:
+    driver: bridge

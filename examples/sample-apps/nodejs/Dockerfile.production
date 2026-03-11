@@ -1,0 +1,73 @@
+# Production Dockerfile for Node.js Application
+# 
+# Features:
+# - Multi-stage build for smaller image size
+# - Security-hardened (non-root user, minimal attack surface)
+# - Optimized for AWS Fargate
+# - Health checks included
+#
+# Build:
+#   docker build -f Dockerfile.production -t myapp:latest .
+#
+# Run:
+#   docker run -p 8080:8080 -e SERVICE_NAME=myapp myapp:latest
+
+# ==========================================
+# Stage 1: Dependencies
+# ==========================================
+FROM node:18-alpine AS dependencies
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install production dependencies only
+RUN npm ci --only=production && npm cache clean --force
+
+# ==========================================
+# Stage 2: Build (if needed for TypeScript, etc.)
+# ==========================================
+# Uncomment if using TypeScript
+# FROM node:18-alpine AS builder
+# WORKDIR /app
+# COPY package*.json ./
+# RUN npm ci
+# COPY . .
+# RUN npm run build
+
+# ==========================================
+# Stage 3: Production
+# ==========================================
+FROM node:18-alpine AS production
+
+# Security: Install security updates
+RUN apk --no-cache add wget ca-certificates && \
+    addgroup -g 1000 -S nodejs && \
+    adduser -u 1000 -S nodejs -G nodejs
+
+WORKDIR /app
+
+# Copy dependencies from stage 1
+COPY --from=dependencies /app/node_modules ./node_modules
+
+# Copy application code
+COPY --chown=nodejs:nodejs . .
+
+# Switch to non-root user
+USER nodejs
+
+# Expose port
+EXPOSE 8080
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD wget -q --spider http://localhost:8080/health || exit 1
+
+# Labels for metadata
+LABEL maintainer="your-email@example.com" \
+      version="1.0.0" \
+      description="ECS Fargate Spot Sample Application"
+
+# Start application
+CMD ["node", "server.js"]

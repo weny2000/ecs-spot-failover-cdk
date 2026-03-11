@@ -1,8 +1,15 @@
 {
-  "name": "ecs-fargate-spot-failover",
+  "name": "ecs-fargate-spot-failover-cdk",
   "version": "1.0.0",
   "description": "ECS Fargate Spot instance automatic failover solution with one-click deployment",
   "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "files": [
+    "lib/**/*.js",
+    "lib/**/*.d.ts",
+    "src/lambda/**/*",
+    "src/step-functions/**/*"
+  ],
   "scripts": {
     "build": "tsc",
     "watch": "tsc -w",
@@ -41,7 +48,7 @@
     "@aws-sdk/client-lambda": "^3.450.0",
     "@aws-sdk/client-sns": "^3.450.0",
     "@aws-sdk/client-sfn": "^3.450.0",
-    "@aws-sdk/client-x-ray": "^3.450.0",
+    "@aws-sdk/client-xray": "^3.450.0",
     "@aws-sdk/lib-dynamodb": "^3.450.0",
     "aws-cdk-lib": "^2.100.0",
     "aws-xray-sdk-core": "^3.5.3",
@@ -59,14 +66,17 @@
     "cost-optimization",
     "high-availability"
   ],
-  "author": "Your Name",
+  "author": "weny2000 <weny2000@example.com>",
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/ecs-fargate-spot-failover.git"
+    "url": "https://github.com/weny2000/ecs-spot-failover-cdk.git"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/ecs-fargate-spot-failover/issues"
+    "url": "https://github.com/weny2000/ecs-spot-failover-cdk/issues"
   },
-  "homepage": "https://github.com/yourusername/ecs-fargate-spot-failover#readme"
+  "homepage": "https://github.com/weny2000/ecs-spot-failover-cdk#readme"
 }

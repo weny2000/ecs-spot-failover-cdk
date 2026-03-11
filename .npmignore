@@ -1,0 +1,43 @@
+# Source files
+src/
+
+# Test files
+test/
+coverage/
+
+# CDK assets
+cdk.out/
+cdk.context.json
+
+# Build artifacts (keep lib/)
+*.ts
+!lib/**/*.d.ts
+tsconfig.json
+jest.config.js
+
+# Documentation (keep README)
+docs/
+*.md
+!README.md
+!CHANGELOG.md
+!LICENSE
+
+# Git
+.git/
+.gitignore
+.github/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Dependencies
+node_modules/
+
+# Misc
+.DS_Store
+.env
+.env.local
+*.log

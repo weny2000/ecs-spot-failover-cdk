@@ -11,6 +11,7 @@ import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-
 import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
 import { SFNClient, StartExecutionCommand } from '@aws-sdk/client-sfn';
 import { CloudWatchClient, PutMetricDataCommand } from '@aws-sdk/client-cloudwatch';
+// Note: @aws-sdk/client-xray is aws-xray-sdk-core in Lambda runtime
 import * as AWSXRay from 'aws-xray-sdk-core';
 
 // Enable X-Ray tracing for AWS SDK v3 clients
@@ -333,7 +334,7 @@ export const handler = async (event: LambdaEvent): Promise<LambdaResponse> => {
 
     // Add metadata to X-Ray segment
     segment?.addAnnotation('serviceName', serviceName);
-    segment?.addAnnotation('stoppedReason', stoppedReason);
+    segment?.addAnnotation('stoppedReason', stoppedReason || 'Unknown');
 
     // Update error count
     const errorCount = await updateErrorCount(serviceName);

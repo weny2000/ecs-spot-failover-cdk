@@ -1,0 +1,12 @@
+{
+  "name": "ecs-fargate-spot-sample-app",
+  "version": "1.0.0",
+  "description": "Sample Node.js application for ECS Fargate Spot Failover testing",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}

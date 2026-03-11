@@ -1,6 +1,7 @@
 # 🚀 ECS Fargate Spot Automatic Failover Solution
 
-
+[![CI](https://github.com/weny2000/ecs-spot-failover-cdk/actions/workflows/ci.yml/badge.svg)](https://github.com/weny2000/ecs-spot-failover-cdk/actions/workflows/ci.yml)
+[![npm version](https://badge.fury.io/js/ecs-fargate-spot-failover.svg)](https://www.npmjs.com/package/ecs-fargate-spot-failover)
 
 A fully automated serverless architecture solution for monitoring ECS Fargate Spot instance health and automatically switching to standard Fargate instances during consecutive failures.
 
@@ -25,6 +26,15 @@ A fully automated serverless architecture solution for monitoring ECS Fargate Sp
 ## 🎯 Overview
 
 When AWS regions experience failures, Spot resource pools are exhausted, or other reasons cause consecutive Fargate Spot instance startup failures, the system automatically switches workloads to more reliable standard Fargate instances, ensuring high availability of services.
+
+### 📖 Background Story
+
+This project is the CDK TypeScript implementation of the solution described in the Qiita blog post **「Fargate Spot で月$42K が $21K になった話」** (How we reduced monthly costs from $42K to $21K with Fargate Spot). 
+
+- **Blog Post (Japanese)**: [Fargate Spot で月$42K が $21K になった話](https://qiita.com/weny/items/your-blog-post-url)
+- **Key Achievement**: Reduced monthly ECS costs by **50%** ($42K → $21K) using Fargate Spot with automatic failover
+
+This CDK implementation upgrades the original Terraform + Python solution to a production-ready TypeScript infrastructure with added ALB integration, Step Functions orchestration, and enhanced observability.
 
 ### Use Cases
 
@@ -62,24 +72,25 @@ When AWS regions experience failures, Spot resource pools are exhausted, or othe
 │  ┌─────────────────────────────────────────────────────────────┐           │
 │  │                    EventBridge                               │           │
 │  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │           │
-│  │  │ STOPPED     │  │ RUNNING     │  │ Event Rules          │  │           │
-│  │  │ (Error)     │  │ (Success)   │  │                      │  │           │
-│  │  └──────┬──────┘  └──────┬──────┘  └─────────────────────┘  │           │
-│  └─────────┼────────────────┼──────────────────────────────────┘           │
-│            │                │                                              │
-│            ▼                ▼                                              │
-│  ┌─────────────────┐  ┌─────────────────┐                                 │
-│  │ Spot Error      │  │ Spot Success    │                                 │
-│  │ Detector        │  │ Monitor         │                                 │
-│  │ Lambda          │  │ Lambda          │                                 │
-│  └────────┬────────┘  └────────┬────────┘                                 │
-│           │                    │                                          │
-│           ▼                    ▼                                          │
-│  ┌─────────────────┐  ┌─────────────────┐                                 │
-│  │ DynamoDB        │  │ Cleanup         │                                 │
-│  │ (Counter)       │  │ Orchestrator    │                                 │
-│  └─────────────────┘  │ Lambda          │                                 │
-│                       └─────────────────┘                                 │
+│  │  │ STOPPED     │  │ RUNNING     │  │ Scheduled (1min)    │  │           │
+│  │  │ (Error)     │  │ (Success)   │  │ PENDING Check       │  │           │
+│  │  └──────┬──────┘  └──────┬──────┘  └──────────┬──────────┘  │           │
+│  └─────────┼────────────────┼────────────────────┼─────────────┘           │
+│            │                │                   │                          │
+│            ▼                ▼                   ▼                          │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐            │
+│  │ Spot Error      │  │ Spot Success    │  │ Pending Task    │            │
+│  │ Detector        │  │ Monitor         │  │ Monitor         │            │
+│  │ Lambda          │  │ Lambda          │  │ Lambda          │            │
+│  │                 │  │                 │  │ (Proactive)     │            │
+│  └────────┬────────┘  └────────┬────────┘  └────────┬────────┘            │
+│           │                    │                    │                     │
+│           ▼                    ▼                    ▼                     │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐           │
+│  │ DynamoDB        │  │ Cleanup         │  │ DynamoDB        │           │
+│  │ (Counter)       │  │ Orchestrator    │  │ (Counter)       │           │
+│  └─────────────────┘  │ Lambda          │  │ (Error++)       │           │
+│                       └─────────────────┘  └─────────────────┘           │
 │            │                                                              │
 │            ▼                                                              │
 │  ┌─────────────────┐                                                      │
@@ -121,8 +132,8 @@ When AWS regions experience failures, Spot resource pools are exhausted, or othe
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/ecs-fargate-spot-failover.git
-cd ecs-fargate-spot-failover
+git clone https://github.com/weny2000/ecs-spot-failover-cdk.git
+cd ecs-spot-failover-cdk
 
 # Install dependencies
 npm install
@@ -144,6 +155,50 @@ aws cloudformation describe-stacks \
 ```
 
 Access in browser: `http://<LoadBalancerDNS>`
+
+### Sample Application Endpoints
+
+The sample application provides several useful endpoints:
+
+| Endpoint | Description |
+|----------|-------------|
+| `/` | Application info |
+| `/health` | Health check (used by ALB) |
+| `/status` | Detailed container info |
+| `/simulate-failure` | Trigger test failure |
+
+Test the deployment:
+```bash
+# Get the Load Balancer DNS
+export ALB_DNS=$(aws cloudformation describe-stacks \
+  --stack-name EcsFargateSpotFailoverStack \
+  --query 'Stacks[0].Outputs[?OutputKey==`LoadBalancerDNS`].OutputValue' \
+  --output text)
+
+# Test endpoints
+curl http://$ALB_DNS/
+curl http://$ALB_DNS/health
+curl http://$ALB_DNS/status
+
+# Simulate failure (container will restart)
+curl -X POST http://$ALB_DNS/simulate-failure
+```
+
+### Using Your Own Application
+
+To deploy your own application instead of the sample nginx app:
+
+```bash
+cd examples/sample-apps/nodejs
+
+# Build and push to ECR
+./build.sh v1.0.0 us-east-1 myapp
+
+# Update CDK context to use your image
+npm run deploy -- -c appImage=myapp:v1.0.0 -c appPort=8080
+```
+
+See [examples/sample-apps/nodejs/README.md](examples/sample-apps/nodejs/README.md) for detailed instructions.
 
 ### 3. Configure Alerts (Optional)
 
@@ -251,6 +306,26 @@ User Request → ALB → Fargate Spot (sample-app: 2 replicas)
 8. Send recovery notification
 ```
 
+### Proactive PENDING Task Monitoring
+
+When Spot capacity is exhausted, tasks may remain in **PENDING** state indefinitely without generating STOPPED events. The **Pending Task Monitor** (runs every 1 minute) proactively detects this:
+
+```
+1. Scheduled scan every 1 minute
+           ↓
+2. List tasks in PENDING state
+           ↓
+3. Check if tasks stuck for > 5 minutes
+           ↓
+4. YES → Increment error counter
+           ↓
+5. If threshold reached → Trigger failover
+           ↓
+6. NO → Continue normal monitoring
+```
+
+This addresses the critical gap in pure event-driven monitoring and ensures rapid failover even when Spot capacity is completely unavailable.
+
 ## 📊 Monitoring & Alerts
 
 ### CloudWatch Logs
@@ -293,7 +368,7 @@ aws ecs describe-services \
 
 | Resource Type | Price Estimate | Notes |
 |--------------|----------------|-------|
-| Fargate Spot | $0.01232/vCPU/hour | ~70% savings vs standard Fargate |
+| Fargate Spot | $0.02049/vCPU/hour (us-east-1) | ~70% savings vs standard Fargate |
 | Fargate Standard | $0.04048/vCPU/hour | Used during failover |
 | Application Load Balancer | ~$0.0225/hour | LCU charges apply |
 | Lambda | Within free tier | Event-driven, minimal invocations |
@@ -394,6 +469,51 @@ cdk destroy
 | [Operations Manual](docs/operations-manual.md) | Daily operations, monitoring, and maintenance |
 | [Release Guide](docs/release-guide.md) | Release management and deployment strategies |
 | [Testing Guide](docs/testing-guide.md) | Testing procedures and validation strategies |
+| [Sample Applications](examples/sample-apps/README.md) | Ready-to-use sample apps (Node.js, Python, Go) with Docker configurations |
+
+## 🔌 Using as a CDK Construct Library
+
+This project is published as a reusable CDK Construct on npm. You can integrate it into your existing CDK projects:
+
+```bash
+npm install ecs-fargate-spot-failover-cdk
+```
+
+### Basic Usage
+
+```typescript
+import { FargateSpotFailoverConstruct } from 'ecs-fargate-spot-failover-cdk';
+
+// Assuming you have existing ECS services
+new FargateSpotFailoverConstruct(this, 'Failover', {
+  cluster: myCluster,
+  spotService: mySpotService,
+  standardService: myStandardService,
+  failureThreshold: 3,
+  enableNotifications: true,
+  notificationEmails: ['alerts@example.com'],
+});
+```
+
+### Advanced Configuration
+
+```typescript
+new FargateSpotFailoverConstruct(this, 'Failover', {
+  cluster: myCluster,
+  spotService: mySpotService,
+  standardService: myStandardService,
+  failureThreshold: 5,
+  enableNotifications: true,
+  notificationEmails: ['ops@example.com'],
+  enablePendingTaskMonitoring: true,  // Detect tasks stuck in PENDING
+  pendingTaskCheckInterval: Duration.minutes(1),
+  pendingTaskTimeout: Duration.minutes(5),
+  enableTracing: true,  // X-Ray tracing
+  cloudWatchNamespace: 'MyApp/FargateSpot',
+});
+```
+
+See [Construct Hub](https://constructs.dev/packages/ecs-fargate-spot-failover-cdk) for full API documentation.
 
 ## 🤝 Contributing
 
@@ -403,7 +523,7 @@ Issues and Pull Requests are welcome!
 
 ```bash
 # 1. Fork and clone
-git clone https://github.com/yourusername/ecs-fargate-spot-failover.git
+git clone https://github.com/weny2000/ecs-spot-failover-cdk.git
 
 # 2. Create feature branch
 git checkout -b feature/your-feature

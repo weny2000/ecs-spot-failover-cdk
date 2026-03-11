@@ -1,0 +1,43 @@
+# Docker Compose for Local Testing - Go Version
+
+version: '3.8'
+
+services:
+  spot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - SERVICE_NAME=sample-app-spot
+      - CAPACITY_PROVIDER=FARGATE_SPOT
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      replicas: 2
+    networks:
+      - app-network
+
+  standard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8081:8080"
+    environment:
+      - PORT=8080
+      - SERVICE_NAME=sample-app-standard
+      - CAPACITY_PROVIDER=FARGATE
+    deploy:
+      replicas: 0
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge

@@ -5,18 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [GitHub Releases](https://github.com/weny2000/ecs-spot-failover-cdk/releases)
+
+For the complete list of releases and downloadable assets, visit the [GitHub Releases page](https://github.com/weny2000/ecs-spot-failover-cdk/releases).
+
 ## [Unreleased]
+
+### Added
+- CDK Construct Library export for npm publishing
+- PENDING task monitoring Lambda (proactive Spot capacity detection)
+- Scheduled EventBridge rule for PENDING task checks (1-minute interval)
+- Support for using as a reusable CDK Construct in external projects
+
+### Fixed
+- Fixed README clone URL (was pointing to wrong repository)
+- Fixed Fargate Spot pricing to match us-east-1 current rates ($0.02049/vCPU/hour)
+- Fixed package.json repository URLs
+- Added GitHub Actions CI badge to README
+
+## [1.0.0] - 2024-03-11
 
 ### Added
 - Initial release of ECS Fargate Spot Failover solution
 - Complete CDK infrastructure with TypeScript
-- Four Lambda functions for failover orchestration
+- Four Lambda functions for failover orchestration:
+  - Spot Error Detector (handles STOPPED events)
+  - Spot Success Monitor (handles RUNNING events)
+  - Failback Orchestrator (handles failover workflow)
+  - Cleanup Orchestrator (handles recovery workflow)
 - Application Load Balancer integration
-- DynamoDB for state management
+- DynamoDB for state management with TTL
 - SNS notifications
 - EventBridge rules for ECS events
+- CloudWatch Dashboard and custom metrics
+- X-Ray tracing support
+- Step Functions for workflow orchestration
 - Sample nginx application
-- Full documentation suite
+- Full documentation suite (6 docs)
 - MIT License
 
 ### Features
@@ -27,6 +52,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Real-time monitoring and alerting
 - One-click deployment with CDK
 - Cost optimization up to 70% savings
+- Multi-region deployment support
+
+### Documentation
+- English README for international audience
+- Architecture documentation
+- Deployment guide
+- Operations manual
+- Testing guide
+- Release guide
 
 ## [1.0.0] - 2024-XX-XX
 
