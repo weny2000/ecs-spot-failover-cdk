@@ -330,12 +330,12 @@ describe('EcsFargateSpotFailoverStack', () => {
     });
   });
 
-  describe('Application Load Balancer', () => {
-    it('should create an ALB', () => {
+  describe('Network Load Balancer', () => {
+    it('should create an NLB', () => {
       template.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', {
-        Name: 'fargate-spot-sample-alb',
+        Name: 'fargate-spot-sample-nlb',
         Scheme: 'internet-facing',
-        Type: 'application',
+        Type: 'network',
       });
     });
 
@@ -343,10 +343,10 @@ describe('EcsFargateSpotFailoverStack', () => {
       template.resourceCountIs('AWS::ElasticLoadBalancingV2::TargetGroup', 2);
     });
 
-    it('should create HTTP listener', () => {
+    it('should create TCP listener', () => {
       template.hasResourceProperties('AWS::ElasticLoadBalancingV2::Listener', {
         Port: 80,
-        Protocol: 'HTTP',
+        Protocol: 'TCP',
       });
     });
   });
@@ -377,7 +377,7 @@ describe('EcsFargateSpotFailoverStack', () => {
       template.hasOutput('NotificationTopicArn', {});
     });
 
-    it('should output ALB DNS', () => {
+    it('should output NLB DNS', () => {
       template.hasOutput('LoadBalancerDNS', {});
     });
   });
@@ -393,7 +393,7 @@ describe('EcsFargateSpotFailoverStack', () => {
       // Should not have ECS services
       testTemplate.resourceCountIs('AWS::ECS::Service', 0);
       
-      // Should not have ALB
+      // Should not have NLB
       testTemplate.resourceCountIs('AWS::ElasticLoadBalancingV2::LoadBalancer', 0);
     });
 

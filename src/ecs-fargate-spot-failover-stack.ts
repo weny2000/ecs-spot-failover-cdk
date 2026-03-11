@@ -8,6 +8,7 @@ import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
+import * as nlb from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
@@ -68,7 +69,7 @@ export class EcsFargateSpotFailoverStack extends cdk.Stack {
   public readonly cluster: ecs.Cluster;
   public readonly spotService: ecs.FargateService;
   public readonly standardService: ecs.FargateService;
-  public readonly loadBalancer: elbv2.ApplicationLoadBalancer;
+  public readonly loadBalancer: nlb.NetworkLoadBalancer;
   public readonly notificationTopic: sns.Topic;
 
   constructor(scope: Construct, id: string, props?: EcsFargateSpotFailoverStackProps) {
@@ -559,22 +560,19 @@ export class EcsFargateSpotFailoverStack extends cdk.Stack {
     // Sample Application (Optional)
     // ==========================================
     if (createSampleApp) {
-      // Application Load Balancer
-      const alb = new elbv2.ApplicationLoadBalancer(this, 'SampleAppALB', {
+      // Network Load Balancer - Higher performance, lower latency than ALB
+      const networkLB = new nlb.NetworkLoadBalancer(this, 'SampleAppNLB', {
         vpc,
         internetFacing: true,
-        loadBalancerName: 'fargate-spot-sample-alb',
+        loadBalancerName: 'fargate-spot-sample-nlb',
       });
-      this.loadBalancer = alb;
-
-      // ALB Security Group
-      const albSecurityGroup = new ec2.SecurityGroup(this, 'ALBSecurityGroup', {
-        vpc,
-        description: 'Security group for ALB',
-        allowAllOutbound: true,
-      });
-      albSecurityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(appPort), 'Allow HTTP traffic');
-      alb.addSecurityGroup(albSecurityGroup);
+      
+      // Enable cross-zone load balancing for better distribution
+      const cfnLB = networkLB.node.defaultChild as nlb.CfnLoadBalancer;
+      cfnLB.addPropertyOverride('LoadBalancerAttributes', [
+        { Key: 'load_balancing.cross_zone.enabled', Value: 'true' },
+      ]);
+      this.loadBalancer = networkLB;
 
       // Task Role for ECS Tasks
       const taskRole = new iam.Role(this, 'ECSTaskRole', {
@@ -657,16 +655,24 @@ export class EcsFargateSpotFailoverStack extends cdk.Stack {
         },
       });
 
-      // Security Group for ECS Services
+      // Security Group for ECS Services - NLB doesn't use security groups at the LB level
+      // but we still need security groups for the ECS tasks
       const serviceSecurityGroup = new ec2.SecurityGroup(this, 'ServiceSecurityGroup', {
         vpc,
         description: 'Security group for ECS services',
         allowAllOutbound: true,
       });
+      // Allow traffic from VPC CIDR (NLB is within VPC)
       serviceSecurityGroup.addIngressRule(
-        ec2.Peer.securityGroupId(alb.connections.securityGroups[0].securityGroupId),
+        ec2.Peer.ipv4(vpc.vpcCidrBlock),
         ec2.Port.tcp(appPort),
-        'Allow traffic from ALB'
+        'Allow traffic from NLB'
+      );
+      // Also allow from anywhere for public access through NLB
+      serviceSecurityGroup.addIngressRule(
+        ec2.Peer.anyIpv4(),
+        ec2.Port.tcp(appPort),
+        'Allow public traffic through NLB'
       );
 
       // Fargate Spot Service
@@ -719,50 +725,58 @@ export class EcsFargateSpotFailoverStack extends cdk.Stack {
       });
       this.standardService = standardService;
 
-      // ALB Target Groups
-      const spotTargetGroup = new elbv2.ApplicationTargetGroup(this, 'SpotTargetGroup', {
+      // NLB Target Groups - Using TCP protocol for better performance
+      const spotTargetGroup = new nlb.NetworkTargetGroup(this, 'SpotTargetGroup', {
         vpc,
         port: appPort,
-        protocol: elbv2.ApplicationProtocol.HTTP,
-        targetType: elbv2.TargetType.IP,
+        protocol: nlb.Protocol.TCP,
+        targetType: nlb.TargetType.IP,
         healthCheck: {
-          path: '/',
-          interval: cdk.Duration.seconds(30),
+          protocol: nlb.Protocol.TCP, // TCP health check for faster response
+          interval: cdk.Duration.seconds(10), // Faster health checks than ALB
           timeout: cdk.Duration.seconds(5),
           healthyThresholdCount: 2,
           unhealthyThresholdCount: 3,
         },
+        deregistrationDelay: cdk.Duration.seconds(30), // Faster deregistration than ALB default (300s)
       });
 
-      const standardTargetGroup = new elbv2.ApplicationTargetGroup(this, 'StandardTargetGroup', {
+      const standardTargetGroup = new nlb.NetworkTargetGroup(this, 'StandardTargetGroup', {
         vpc,
         port: appPort,
-        protocol: elbv2.ApplicationProtocol.HTTP,
-        targetType: elbv2.TargetType.IP,
+        protocol: nlb.Protocol.TCP,
+        targetType: nlb.TargetType.IP,
         healthCheck: {
-          path: '/',
-          interval: cdk.Duration.seconds(30),
+          protocol: nlb.Protocol.TCP,
+          interval: cdk.Duration.seconds(10),
           timeout: cdk.Duration.seconds(5),
           healthyThresholdCount: 2,
           unhealthyThresholdCount: 3,
         },
+        deregistrationDelay: cdk.Duration.seconds(30),
       });
 
       // Attach services to target groups
       spotTargetGroup.addTarget(spotService);
       standardTargetGroup.addTarget(standardService);
 
-      // ALB Listener
-      const listener = alb.addListener('HTTPListener', {
+      // NLB Listener - TCP protocol for maximum performance
+      const listener = networkLB.addListener('TCPListener', {
         port: appPort,
-        open: true,
+        protocol: nlb.Protocol.TCP,
         defaultTargetGroups: [spotTargetGroup],
       });
 
-      // Output ALB DNS
+      // Output NLB DNS
       new cdk.CfnOutput(this, 'LoadBalancerDNS', {
-        value: alb.loadBalancerDnsName,
-        description: 'Application Load Balancer DNS Name',
+        value: networkLB.loadBalancerDnsName,
+        description: 'Network Load Balancer DNS Name (High Performance)',
+      });
+      
+      // Output NLB static IPs (if using NLB)
+      new cdk.CfnOutput(this, 'LoadBalancerIPs', {
+        value: networkLB.loadBalancerCanonicalHostedZoneId || 'N/A',
+        description: 'NLB Hosted Zone ID',
       });
 
       // Output Service Names

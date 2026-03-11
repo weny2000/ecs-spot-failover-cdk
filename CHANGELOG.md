@@ -33,7 +33,7 @@ For the complete list of releases and downloadable assets, visit the [GitHub Rel
   - Spot Success Monitor (handles RUNNING events)
   - Failback Orchestrator (handles failover workflow)
   - Cleanup Orchestrator (handles recovery workflow)
-- Application Load Balancer integration
+- Network Load Balancer (NLB) integration for high performance
 - DynamoDB for state management with TTL
 - SNS notifications
 - EventBridge rules for ECS events
@@ -68,7 +68,7 @@ For the complete list of releases and downloadable assets, visit the [GitHub Rel
 - Initial stable release
 - TypeScript support for all Lambda functions
 - AWS SDK v3 migration
-- Complete architecture with VPC, ECS, ALB
+- Complete architecture with VPC, ECS, NLB
 - Multi-environment deployment support
 - Comprehensive documentation
 

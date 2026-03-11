@@ -8,8 +8,11 @@
 #
 # Endpoints:
 #   - http://localhost:8080       # Main application
-#   - http://localhost:8080/health # Health check
+#   - http://localhost:8080/health # Health check (TCP on NLB)
 #   - http://localhost:8080/status # Detailed status
+#
+# Note: Production uses NLB (Network Load Balancer) for higher performance
+# NLB uses TCP health checks instead of HTTP for faster response times
 
 version: '3.8'
 

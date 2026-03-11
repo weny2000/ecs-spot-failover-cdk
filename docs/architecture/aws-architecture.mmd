@@ -6,7 +6,7 @@ graph TB
             direction TB
             
             subgraph PublicSubnet["🌐 Public Subnets"]
-                ALB["⚖️ Application Load Balancer<br/>Port: 80<br/>Internet-facing"]
+                NLB["⚖️ Network Load Balancer<br/>Port: 80, TCP<br/>Internet-facing"]
                 NAT["🔌 NAT Gateway"]
             end
             
@@ -52,9 +52,9 @@ graph TB
     end
 
     ' Traffic flow
-    Users["👥 Users"] --> ALB
-    ALB -->|Primary| SpotTG
-    ALB -.->|Failover| StandardTG
+    Users["👥 Users"] --> NLB
+    NLB -->|Primary| SpotTG
+    NLB -.->|Failover| StandardTG
     SpotTG --> SpotService
     StandardTG -.-> StandardService
 
@@ -110,7 +110,7 @@ graph TB
     class Spot1,Spot2,SpotService,SpotTG spot
     class Standard1,StandardService,StandardTG standard
     class VPC network
-    class PublicSubnet,ALB,NAT public
+    class PublicSubnet,NLB,NAT public
     class PrivateSubnet,ECSCluster private
     class EventBridge,SpotError,SpotSuccess,Failback,Cleanup,DynamoDB,SNS,CloudWatch,Serverless,LambdaFunctions serverless
     class Users external

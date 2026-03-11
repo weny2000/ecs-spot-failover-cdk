@@ -179,7 +179,7 @@ Configure Route53 health checks and failover routing:
         "Failover": "PRIMARY",
         "AliasTarget": {
           "HostedZoneId": "Z35SXDOTRQ7X7K",
-          "DNSName": "primary-alb.amazonaws.com",
+          "DNSName": "primary-nlb.amazonaws.com",
           "EvaluateTargetHealth": true
         },
         "HealthCheckId": "primary-health-check-id"
@@ -194,7 +194,7 @@ Configure Route53 health checks and failover routing:
         "Failover": "SECONDARY",
         "AliasTarget": {
           "HostedZoneId": "Z35SXDOTRQ7X7K",
-          "DNSName": "dr-alb.amazonaws.com",
+          "DNSName": "dr-nlb.amazonaws.com",
           "EvaluateTargetHealth": true
         }
       }
@@ -254,7 +254,7 @@ Multi-region deployment increases costs:
 | Component | Additional Cost |
 |-----------|-----------------|
 | ECS Tasks | Per region |
-| ALB | Per region |
+| NLB | Per region |
 | DynamoDB Global Tables | Write replication charges |
 | Data Transfer | Cross-region replication |
 | CloudWatch | Per region |
@@ -291,7 +291,7 @@ aws dynamodb describe-global-table \
 
 **Problem**: DNS not failing over
 - Check Route53 health check status
-- Verify ALB health checks are passing
+- Verify NLB health checks are passing
 
 ## Best Practices
 

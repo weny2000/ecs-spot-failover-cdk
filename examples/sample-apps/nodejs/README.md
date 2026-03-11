@@ -42,7 +42,7 @@ docker-compose up -d
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/` | GET | Application info and status |
-| `/health` | GET | Health check for ALB (returns 200 if healthy) |
+| `/health` | GET | Health check for NLB (returns 200 if healthy) |
 | `/ready` | GET | Readiness probe |
 | `/live` | GET | Liveness probe |
 | `/status` | GET | Detailed system information |

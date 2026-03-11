@@ -23,7 +23,7 @@ This directory contains architecture diagrams for the ECS Fargate Spot Failover 
 │  │                                                                      │   │
 │  │  ┌──────────────────────────────────────────────────────────────┐   │   │
 │  │  │ 🌐 Public Subnets                                             │   │   │
-│  │  │  ⚖️ Application Load Balancer (Port 80)                        │   │   │
+│  │  │  ⚖️ Network Load Balancer (Port 80, TCP)                       │   │   │
 │  │  └──────────────────────┬───────────────────────────────────────┘   │   │
 │  │                         │                                           │   │
 │  │  ┌──────────────────────┴───────────────────────────────────────┐   │   │
@@ -125,29 +125,29 @@ Reference directly in Markdown files:
 
 | Style | Meaning | Example |
 |-------|---------|---------|
-| Solid line (→) | Primary traffic/control flow | ALB → Spot Service |
-| Dashed line (-.->) | Failover/backup | ALB -.-> Standard Service |
+| Solid line (→) | Primary traffic/control flow | NLB → Spot Service |
+| Dashed line (-.->) | Failover/backup | NLB -.-> Standard Service |
 | Thick line | High-frequency interaction | Lambda ↔ DynamoDB |
 
 ### Data Flow Descriptions
 
 #### Normal Traffic Flow
 ```
-Users → ALB → Spot Target Group → Fargate Spot Service
+Users → NLB → Spot Target Group → Fargate Spot Service
 ```
 
 #### Failover Flow
 ```
 Spot Error → EventBridge → Spot Error Detector → Failback Orchestrator
   → Start Standard Service + Stop Spot Service
-  → ALB automatically switches traffic to Standard Target Group
+  → NLB automatically switches traffic to Standard Target Group
 ```
 
 #### Auto-Recovery Flow
 ```
 Spot Success → EventBridge → Spot Success Monitor → Cleanup Orchestrator
   → Start Spot Service + Stop Standard Service
-  → ALB automatically switches back to Spot Target Group
+  → NLB automatically switches back to Spot Target Group
 ```
 
 ## 🔄 Updating Architecture Diagrams

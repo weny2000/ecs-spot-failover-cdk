@@ -12,9 +12,9 @@
 │  │                              VPC (10.0.0.0/16)                                   │    │
 │  │                                                                                  │    │
 │  │  ┌─────────────────────────────────────────────────────────────────────────┐    │    │
-│  │  │                        Public Subnets (ALB)                              │    │    │
+│  │  │                        Public Subnets (NLB)                              │    │    │
 │  │  │  ┌─────────────────┐                                                    │    │    │
-│  │  │  │   ALB (HTTP)    |<<────────────────── User Traffic                    │    │    │
+│  │  │  │   NLB (TCP)     |<<────────────────── User Traffic                    │    │    │
 │  │  │  │   Port: 80      |                                                    │    │    │
 │  │  │  └────────┬────────┘                                                    │    │    │
 │  │  └───────────┼─────────────────────────────────────────────────────────────┘    │    │
@@ -105,7 +105,7 @@
 | Component | Description |
 |-----------|-------------|
 | VPC | 10.0.0.0/16 CIDR, 2 Availability Zones |
-| Public Subnets | Used to deploy Application Load Balancer |
+| Public Subnets | Used to deploy Network Load Balancer |
 | Private Subnets | Used to deploy ECS Fargate tasks |
 | NAT Gateway | Allows tasks in private subnets to access the internet |
 
@@ -123,10 +123,10 @@
 - **Initial Replica Count**: 0 (automatically starts during failover)
 - **Purpose**: High-availability backup
 
-### 3. Load Balancer Layer (ALB)
+### 3. Load Balancer Layer (NLB)
 
 ```
-User Request -> ALB -> Target Group (Spot) -> Fargate Spot Tasks
+User Request -> NLB -> Target Group (Spot) -> Fargate Spot Tasks
                           |
                     Failover Switch
                           |
@@ -274,7 +274,7 @@ Each Lambda function has only the minimum necessary permissions:
 ### Network Security
 
 - ECS tasks deployed in private subnets with no public IP
-- Only ALB exposed to the internet
+- Only NLB exposed to the internet
 - Security groups only open necessary ports
 
 ### Data Security
@@ -288,7 +288,7 @@ Each Lambda function has only the minimum necessary permissions:
 ### Horizontal Scaling
 
 - Support increasing replica count for Spot and Standard services
-- ALB automatically handles traffic distribution
+- NLB automatically handles traffic distribution
 - DynamoDB on-demand mode auto-scales
 
 ### Multi-Service Support

@@ -27,7 +27,7 @@ cd go && docker build -t sample-go .
 
 All sample applications provide:
 
-- ✅ **Health check endpoint** (`/health`) - Required for ALB
+- ✅ **Health check endpoint** (`/health`) - Required for NLB
 - ✅ **Readiness probe** (`/ready`) - For Kubernetes-style orchestration
 - ✅ **Liveness probe** (`/live`) - For container health monitoring
 - ✅ **Status endpoint** (`/status`) - System information

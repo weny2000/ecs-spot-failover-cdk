@@ -23,7 +23,7 @@ This guide provides detailed instructions on how to deploy the ECS Fargate Spot 
   - Amazon EventBridge
   - Amazon SNS
   - Amazon VPC
-  - Application Load Balancer
+  - Network Load Balancer (NLB)
   - AWS CloudWatch
   - AWS IAM
 
@@ -242,13 +242,13 @@ aws events describe-rule \
 
 ```bash
 # Get Load Balancer DNS
-ALB_DNS=$(aws cloudformation describe-stacks \
+NLB_DNS=$(aws cloudformation describe-stacks \\
   --stack-name EcsFargateSpotFailoverStack \
   --query 'Stacks[0].Outputs[?OutputKey==`LoadBalancerDNS`].OutputValue' \
   --output text)
 
 # Test access
-curl http://$ALB_DNS
+curl http://$NLB_DNS
 ```
 
 ## Configure Alert Notifications

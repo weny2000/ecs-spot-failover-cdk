@@ -5,6 +5,10 @@
 
 A fully automated serverless architecture solution for monitoring ECS Fargate Spot instance health and automatically switching to standard Fargate instances during consecutive failures.
 
+🌍 **KEY DIFFERENTIATORS**:
+1. **Network Load Balancer (NLB)** - Higher performance and lower latency than ALB
+2. **Automatic cross-region disaster recovery** with intelligent health monitoring and DNS-based multi-region failover
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![AWS CDK](https://img.shields.io/badge/AWS-CDK-orange.svg)](https://aws.amazon.com/cdk/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-4.9+-blue.svg)](https://www.typescriptlang.org/)
@@ -12,8 +16,9 @@ A fully automated serverless architecture solution for monitoring ECS Fargate Sp
 ## 📋 Table of Contents
 
 - [Overview](#-overview)
+- [Key Features](#-key-features)
 - [Architecture](#-architecture)
-- [Features](#-features)
+- [Multi-Region Failover](#-multi-region-failover-unique)
 - [Quick Start](#-quick-start)
 - [Deployment Options](#-deployment-options)
 - [How It Works](#-how-it-works)
@@ -34,7 +39,7 @@ This project is the CDK TypeScript implementation of the solution described in t
 - **Blog Post (Japanese)**: [Fargate Spot で月$42K が $21K になった話](https://qiita.com/weny/items/your-blog-post-url)
 - **Key Achievement**: Reduced monthly ECS costs by **50%** ($42K → $21K) using Fargate Spot with automatic failover
 
-This CDK implementation upgrades the original Terraform + Python solution to a production-ready TypeScript infrastructure with added ALB integration, Step Functions orchestration, and enhanced observability.
+This CDK implementation upgrades the original Terraform + Python solution to a production-ready TypeScript infrastructure with added NLB (Network Load Balancer) integration, Step Functions orchestration, and enhanced observability.
 
 ### Use Cases
 
@@ -52,8 +57,8 @@ This CDK implementation upgrades the original Terraform + Python solution to a p
 │                                 │                                           │
 │                                 ▼                                           │
 │                    ┌──────────────────────┐                                │
-│                    │  Application Load    │                                │
-│                    │     Balancer         │                                │
+│                    │   Network Load       │                                │
+│                    │     Balancer (NLB)   │                                │
 │                    └──────────┬───────────┘                                │
 │                               │                                             │
 │           ┌───────────────────┴───────────────────┐                        │
@@ -111,12 +116,78 @@ This CDK implementation upgrades the original Terraform + Python solution to a p
 | Feature | Description |
 |---------|-------------|
 | 🚀 **Fully Automated** | Fault detection and switching without manual intervention |
+| 🌍 **Multi-Region DR** | **Automatic cross-region failover** with DNS-based routing |
 | 💰 **Cost Optimized** | Prioritize Spot instances, save up to 70% on costs |
 | 🔄 **Intelligent Recovery** | Auto-switch back to cost-effective mode after Spot recovery |
 | 📊 **Real-time Monitoring** | Complete event logs and status tracking |
 | 🔔 **Alert Notifications** | Real-time notifications for critical events |
 | ⚡ **Fast Response** | Event-driven architecture based on EventBridge |
 | 🏗️ **One-Click Deploy** | Complete infrastructure as code with CDK |
+
+## 🌍 Multi-Region Failover (UNIQUE)
+
+This solution provides **true multi-region high availability** - a key differentiator from other ECS Spot failover tools.
+
+### Architecture
+
+```
+                    Route53 DNS
+              (Health Checks + Failover)
+                       │
+     ┌─────────────────┼─────────────────┐
+     │                 │                 │
+     ▼                 ▼                 ▼
+┌─────────┐      ┌─────────┐      ┌─────────┐
+│ Primary │      │   DR    │      │   DR    │
+│us-east-1│      │us-west-2│      │eu-west-1│
+├─────────┤      ├─────────┤      ├─────────┤
+│ECS Spot │      │ECS Spot │      │ECS Spot │
+│   +     │      │   +     │      │   +     │
+│Standard │      │Standard │      │Standard │
+│         │      │         │      │         │
+│DynamoDB │◄────►│DynamoDB │◄────►│DynamoDB │
+│Global   │      │Global   │      │Global   │
+└─────────┘      └─────────┘      └─────────┘
+```
+
+### Quick Deploy (Multi-Region)
+
+```bash
+# Deploy to 2 regions with automatic DNS failover
+npm run deploy -- \
+  -c primaryRegion=us-east-1 \
+  -c secondaryRegions=us-west-2 \
+  -c hostedZoneId=Z123456789 \
+  -c dnsRecordName=app.example.com
+
+# Or use warm standby for faster failover
+npm run deploy -- \
+  -c primaryRegion=us-east-1 \
+  -c secondaryRegions=us-west-2,eu-west-1 \
+  -c warmStandby=true
+```
+
+### Key Capabilities
+
+| Capability | Description |
+|------------|-------------|
+| **Health Monitoring** | 30-second health checks across all regions |
+| **Auto Failover** | DNS switches to healthy region when primary fails |
+| **Auto Failback** | Traffic returns to primary when it recovers |
+| **State Sync** | DynamoDB Global Tables replicate state across regions |
+| **Cold/Warm Standby** | Choose cost vs. recovery time tradeoff |
+
+### Comparison
+
+| Feature | This Solution | Other Tools |
+|---------|--------------|-------------|
+| Single Region Spot→Standard | ✅ | ✅ |
+| **Multi-Region Deployment** | ✅ | ❌ |
+| **Automatic DNS Failover** | ✅ | ❌ |
+| **Cross-Region State Sync** | ✅ | ❌ |
+| **Health-Based Routing** | ✅ | ❌ |
+
+📖 [Full Multi-Region Documentation](docs/multi-region-auto-failover.md)
 
 ## 🚀 Quick Start
 
@@ -163,25 +234,25 @@ The sample application provides several useful endpoints:
 | Endpoint | Description |
 |----------|-------------|
 | `/` | Application info |
-| `/health` | Health check (used by ALB) |
+| `/health` | Health check (used by NLB) |
 | `/status` | Detailed container info |
 | `/simulate-failure` | Trigger test failure |
 
 Test the deployment:
 ```bash
 # Get the Load Balancer DNS
-export ALB_DNS=$(aws cloudformation describe-stacks \
+export NLB_DNS=$(aws cloudformation describe-stacks \\
   --stack-name EcsFargateSpotFailoverStack \
   --query 'Stacks[0].Outputs[?OutputKey==`LoadBalancerDNS`].OutputValue' \
   --output text)
 
 # Test endpoints
-curl http://$ALB_DNS/
-curl http://$ALB_DNS/health
-curl http://$ALB_DNS/status
+curl http://$NLB_DNS/
+curl http://$NLB_DNS/health
+curl http://$NLB_DNS/status
 
 # Simulate failure (container will restart)
-curl -X POST http://$ALB_DNS/simulate-failure
+curl -X POST http://$NLB_DNS/simulate-failure
 ```
 
 ### Using Your Own Application
@@ -259,7 +330,7 @@ npm run deploy
 ### Normal Operation
 
 ```
-User Request → ALB → Fargate Spot (sample-app: 2 replicas)
+User Request → NLB → Fargate Spot (sample-app: 2 replicas)
                               ↓
                     Spot Success Monitor (Success Events)
                               ↓
@@ -281,7 +352,7 @@ User Request → ALB → Fargate Spot (sample-app: 2 replicas)
            ↓
 6. Stop Spot service (sample-app: 0 replicas)
            ↓
-7. ALB automatically switches traffic to standard service
+7. NLB automatically switches traffic to standard service
            ↓
 8. Send alert notification
 ```
@@ -301,7 +372,7 @@ User Request → ALB → Fargate Spot (sample-app: 2 replicas)
            ↓
 6. Stop standard service (sample-app-standard: 0 replicas)
            ↓
-7. ALB switches traffic back to Spot service
+7. NLB switches traffic back to Spot service
            ↓
 8. Send recovery notification
 ```
@@ -370,7 +441,7 @@ aws ecs describe-services \
 |--------------|----------------|-------|
 | Fargate Spot | $0.02049/vCPU/hour (us-east-1) | ~70% savings vs standard Fargate |
 | Fargate Standard | $0.04048/vCPU/hour | Used during failover |
-| Application Load Balancer | ~$0.0225/hour | LCU charges apply |
+| Network Load Balancer | ~$0.0225/hour | Lower latency, higher throughput |
 | Lambda | Within free tier | Event-driven, minimal invocations |
 | DynamoDB | Within free tier | On-demand billing |
 | SNS | Within free tier | Alert notifications |
@@ -464,7 +535,9 @@ cdk destroy
 | Document | Description |
 |----------|-------------|
 | [Architecture Overview](docs/architecture-overview.md) | System architecture and component details |
+| [Network Load Balancer](docs/network-load-balancer.md) | **🚀 High Performance**: NLB configuration and benefits |
 | [Deployment Guide](docs/deployment-guide.md) | Detailed deployment steps and configuration |
+| [Multi-Region Failover](docs/multi-region-auto-failover.md) | **🌍 Unique feature**: Automatic cross-region disaster recovery |
 | [Execution Guide](docs/execution-guide.md) | System execution and operation procedures |
 | [Operations Manual](docs/operations-manual.md) | Daily operations, monitoring, and maintenance |
 | [Release Guide](docs/release-guide.md) | Release management and deployment strategies |

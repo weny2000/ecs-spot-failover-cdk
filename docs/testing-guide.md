@@ -106,7 +106,7 @@ Test contents:
 - ✅ IAM roles (permission policies)
 - ✅ EventBridge rules (event patterns, targets)
 - ✅ ECS services (task definitions, capacity strategies)
-- ✅ ALB (listeners, target groups)
+- ✅ NLB (listeners, target groups)
 - ✅ Configuration options (createSampleApp, desiredCount, appPort)
 
 ## Integration Testing
@@ -389,7 +389,7 @@ watch -n 5 'aws dynamodb scan --table-name fargate-spot-error-counter'
 - [ ] EventBridge rules enabled
 - [ ] DynamoDB table accessible
 - [ ] SNS Topic publishable
-- [ ] ALB health checks passing
+- [ ] NLB health checks passing
 
 ### Functional Tests
 

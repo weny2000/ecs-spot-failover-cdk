@@ -20,7 +20,7 @@ rectangle "AWS Cloud" as Cloud {
     rectangle "VPC (10.0.0.0/16)" as VPC #E8F4FD {
         
         rectangle "Public Subnets\n(10.0.1.0/24, 10.0.2.0/24)" as PublicSubnet #FFF8DC {
-            ElasticLoadBalancingApplicationLoadBalancer(alb, "Application\nLoad Balancer\nPort: 80", "")
+            ElasticLoadBalancingNetworkLoadBalancer(nlb, "Network\nLoad Balancer\nPort: 80, TCP", "")
             NATGateway(nat, "NAT\nGateway", "")
         }
         
@@ -60,8 +60,8 @@ rectangle "AWS Cloud" as Cloud {
 }
 
 ' Connections
-alb --> SpotTG : Primary
-alb --> StandardTG : Failover (orange)
+nlb --> SpotTG : Primary
+nlb --> StandardTG : Failover (orange)
 SpotTG --> SpotService
 StandardTG --> StandardService
 

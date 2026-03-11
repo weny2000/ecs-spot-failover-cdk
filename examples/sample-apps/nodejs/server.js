@@ -2,7 +2,7 @@
  * Sample Node.js Application for ECS Fargate Spot Failover Testing
  * 
  * This application provides:
- * - Health check endpoint for ALB
+ * - Health check endpoint for NLB
  * - Status endpoint showing container metadata
  * - Simulated failure endpoint for testing failover
  */
@@ -18,7 +18,7 @@ const CAPACITY_PROVIDER = process.env.CAPACITY_PROVIDER || 'unknown';
 // Middleware
 app.use(express.json());
 
-// Health check endpoint for ALB
+// Health check endpoint for NLB
 app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'healthy',

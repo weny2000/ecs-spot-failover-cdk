@@ -40,8 +40,8 @@
           <mxGeometry x="20" y="80" width="1440" height="150" as="geometry" />
         </mxCell>
         
-        <!-- Application Load Balancer -->
-        <mxCell id="alb" value="&lt;b&gt;Application Load Balancer&lt;/b&gt;&#xa;Port: 80&#xa;Internet-facing" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#8C4FFF;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=12;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.elastic_load_balancing;" vertex="1" parent="public-subnet">
+        <!-- Network Load Balancer -->
+        <mxCell id="nlb" value="&lt;b&gt;Network Load Balancer&lt;/b&gt;&#xa;Port: 80, TCP&#xa;Internet-facing" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#8C4FFF;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=12;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.elastic_load_balancing;" vertex="1" parent="public-subnet">
           <mxGeometry x="640" y="30" width="78" height="78" as="geometry" />
         </mxCell>
         
@@ -159,13 +159,13 @@
           <mxGeometry x="240" y="170" width="100" height="90" as="geometry" />
         </mxCell>
         
-        <!-- Connection: ALB to Spot Target Group -->
-        <mxCell id="conn-alb-spot" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#009900;fontSize=11;" edge="1" parent="1" source="alb" target="spot-target-group">
+        <!-- Connection: NLB to Spot Target Group -->
+        <mxCell id="conn-nlb-spot" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#009900;fontSize=11;" edge="1" parent="1" source="nlb" target="spot-target-group">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         
-        <!-- Connection: ALB to Standard Target Group -->
-        <mxCell id="conn-alb-std" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#ff9900;fontSize=11;dashed=1;" edge="1" parent="1" source="alb" target="standard-target-group">
+        <!-- Connection: NLB to Standard Target Group -->
+        <mxCell id="conn-nlb-std" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#ff9900;fontSize=11;dashed=1;" edge="1" parent="1" source="nlb" target="standard-target-group">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         

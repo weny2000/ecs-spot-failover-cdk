@@ -14,14 +14,14 @@ npm install
 npm run deploy
 
 # Get the Load Balancer URL
-export ALB_DNS=$(aws cloudformation describe-stacks \
+export NLB_DNS=$(aws cloudformation describe-stacks \\
   --stack-name EcsFargateSpotFailoverStack \
   --query 'Stacks[0].Outputs[?OutputKey==`LoadBalancerDNS`].OutputValue' \
   --output text)
 
 # Test
-curl http://$ALB_DNS
-curl http://$ALB_DNS/health
+curl http://$NLB_DNS
+curl http://$NLB_DNS/health
 ```
 
 ### Option 2: Test with Custom Node.js Application
@@ -167,14 +167,14 @@ spotTaskDef.addContainer('AppContainer', {
 ### Step 6: Test Failover
 
 ```bash
-# Get the ALB DNS
-export ALB_DNS=$(aws cloudformation describe-stacks \
+# Get the NLB DNS
+export NLB_DNS=$(aws cloudformation describe-stacks \\
   --stack-name EcsFargateSpotFailoverStack \
   --query 'Stacks[0].Outputs[?OutputKey==`LoadBalancerDNS`].OutputValue' \
   --output text)
 
 # Trigger failure (this will crash the container)
-curl -X POST http://$ALB_DNS/simulate-failure
+curl -X POST http://$NLB_DNS/simulate-failure
 
 # Watch CloudWatch logs to see failover in action
 aws logs tail /ecs/your-cluster-name --follow
@@ -258,7 +258,7 @@ app.get('/api/data', async (req, res) => {
 ```bash
 # Simulate multiple Spot failures
 for i in {1..5}; do
-  curl -X POST http://$ALB_DNS/simulate-failure
+  curl -X POST http://$NLB_DNS/simulate-failure
   sleep 2
 done
 

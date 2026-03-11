@@ -2,7 +2,7 @@
 Sample Python Application for ECS Fargate Spot Failover Testing
 
 This application provides:
-- Health check endpoint for ALB
+- Health check endpoint for NLB
 - Status endpoint showing container metadata
 - Simulated failure endpoint for testing failover
 """
@@ -44,7 +44,7 @@ def get_memory_info():
 
 @app.route('/health')
 def health():
-    """Health check endpoint for ALB"""
+    """Health check endpoint for NLB"""
     return jsonify({
         'status': 'healthy',
         'timestamp': datetime.utcnow().isoformat(),
