@@ -1,22 +1,22 @@
-# 部署指南
+# Deployment Guide
 
-本指南详细介绍如何部署 ECS Fargate Spot 自动故障转移解决方案。
+This guide provides detailed instructions on how to deploy the ECS Fargate Spot Automatic Failover Solution.
 
-## 目录
+## Table of Contents
 
-- [准备工作](#准备工作)
-- [快速部署](#快速部署)
-- [分步部署](#分步部署)
-- [配置选项](#配置选项)
-- [验证部署](#验证部署)
-- [故障排除](#故障排除)
+- [Prerequisites](#prerequisites)
+- [Quick Deployment](#quick-deployment)
+- [Step-by-Step Deployment](#step-by-step-deployment)
+- [Configuration Options](#configuration-options)
+- [Verify Deployment](#verify-deployment)
+- [Troubleshooting](#troubleshooting)
 
-## 准备工作
+## Prerequisites
 
-### 1. AWS 账户要求
+### 1. AWS Account Requirements
 
-- 有效的 AWS 账户
-- 具备以下服务的权限：
+- Valid AWS account
+- Permissions for the following services:
   - Amazon ECS
   - AWS Lambda
   - Amazon DynamoDB
@@ -27,56 +27,56 @@
   - AWS CloudWatch
   - AWS IAM
 
-### 2. 本地环境要求
+### 2. Local Environment Requirements
 
-| 工具 | 最低版本 | 安装链接 |
-|------|---------|---------|
-| Node.js | 18.x | [下载](https://nodejs.org/) |
-| AWS CLI | 2.x | [安装指南](https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html) |
+| Tool | Minimum Version | Installation Link |
+|------|-----------------|-------------------|
+| Node.js | 18.x | [Download](https://nodejs.org/) |
+| AWS CLI | 2.x | [Installation Guide](https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html) |
 | AWS CDK | 2.100+ | `npm install -g aws-cdk` |
-| Git | 2.x | [下载](https://git-scm.com/) |
+| Git | 2.x | [Download](https://git-scm.com/) |
 
-### 3. AWS 配置
+### 3. AWS Configuration
 
 ```bash
-# 配置 AWS CLI
+# Configure AWS CLI
 aws configure
 
-# 验证配置
+# Verify configuration
 aws sts get-caller-identity
 ```
 
-### 4. CDK 引导
+### 4. CDK Bootstrap
 
-如果是首次在 AWS 账户中使用 CDK：
+If this is your first time using CDK in your AWS account:
 
 ```bash
-# 引导 CDK (每个区域只需执行一次)
+# Bootstrap CDK (only required once per region)
 cdk bootstrap aws://<ACCOUNT_ID>/<REGION>
 
-# 例如
+# Example
 cdk bootstrap aws://123456789012/us-east-1
 ```
 
-## 快速部署
+## Quick Deployment
 
-### 方式一：完整部署（推荐）
+### Option 1: Full Deployment (Recommended)
 
-部署包含示例应用的完整解决方案：
+Deploy the complete solution with sample application:
 
 ```bash
-# 克隆项目
+# Clone the project
 git clone https://github.com/yourusername/ecs-fargate-spot-failover.git
 cd ecs-fargate-spot-failover
 
-# 安装依赖
+# Install dependencies
 npm install
 
-# 一键部署
+# One-click deployment
 npm run deploy
 ```
 
-部署完成后，你会看到类似输出：
+After deployment completes, you will see output similar to:
 
 ```
 EcsFargateSpotFailoverStack: creating CloudFormation changeset...
@@ -92,95 +92,95 @@ EcsFargateSpotFailoverStack.SpotServiceName = sample-app
 EcsFargateSpotFailoverStack.StandardServiceName = sample-app-standard
 ```
 
-### 方式二：最小化部署
+### Option 2: Minimal Deployment
 
-仅部署故障转移机制（适用于已有 ECS 服务的场景）：
+Deploy only the failover mechanism (for scenarios with existing ECS services):
 
 ```bash
 npm run deploy:minimal
 ```
 
-### 方式三：自定义部署
+### Option 3: Custom Deployment
 
 ```bash
-# 自定义副本数
+# Customize replica count
 npm run deploy -- -c sampleAppDesiredCount=4
 
-# 自定义应用端口
+# Customize application port
 npm run deploy -- -c appPort=8080
 
-# 自定义副本数和端口
+# Customize both replica count and port
 npm run deploy -- -c sampleAppDesiredCount=3 -c appPort=3000
 ```
 
-## 分步部署
+## Step-by-Step Deployment
 
-### 步骤 1：安装依赖
+### Step 1: Install Dependencies
 
 ```bash
 npm install
 ```
 
-### 步骤 2：编译 TypeScript
+### Step 2: Compile TypeScript
 
 ```bash
 npm run build
 ```
 
-### 步骤 3：查看变更
+### Step 3: View Changes
 
 ```bash
 npm run diff
 ```
 
-### 步骤 4：合成 CloudFormation 模板
+### Step 4: Synthesize CloudFormation Template
 
 ```bash
 npm run synth
 ```
 
-这会生成 `cdk.out/` 目录，包含 CloudFormation 模板。
+This will generate the `cdk.out/` directory containing the CloudFormation templates.
 
-### 步骤 5：部署
+### Step 5: Deploy
 
 ```bash
 npm run deploy
 ```
 
-## 配置选项
+## Configuration Options
 
-### CDK Context 参数
+### CDK Context Parameters
 
-| 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `createSampleApp` | boolean | `true` | 是否创建示例应用 |
-| `sampleAppDesiredCount` | number | `2` | Spot 服务初始副本数 |
-| `appPort` | number | `80` | 应用端口 |
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `createSampleApp` | boolean | `true` | Whether to create the sample application |
+| `sampleAppDesiredCount` | number | `2` | Initial replica count for Spot service |
+| `appPort` | number | `80` | Application port |
 
-### 环境变量配置
+### Environment Variable Configuration
 
-编辑 Lambda 函数的环境变量（在 `src/ecs-fargate-spot-failover-stack.ts` 中）：
+Edit Lambda function environment variables (in `src/ecs-fargate-spot-failover-stack.ts`):
 
 ```typescript
 // Spot Error Detector
-spotErrorDetector.addEnvironment('FAILURE_THRESHOLD', '3');  // 故障转移阈值
+spotErrorDetector.addEnvironment('FAILURE_THRESHOLD', '3');  // Failover threshold
 
 // Cleanup Orchestrator
-cleanupOrchestrator.addEnvironment('CLEANUP_DELAY', '30');   // 清理延迟(秒)
+cleanupOrchestrator.addEnvironment('CLEANUP_DELAY', '30');   // Cleanup delay (seconds)
 
-// 所有编排器
-orchestrator.addEnvironment('SERVICE_STABLE_TIMEOUT', '300');  // 服务稳定超时(秒)
+// All orchestrators
+orchestrator.addEnvironment('SERVICE_STABLE_TIMEOUT', '300');  // Service stable timeout (seconds)
 ```
 
-### 修改后重新部署
+### Redeploy After Changes
 
 ```bash
 npm run build && npm run deploy
 ```
 
-## 验证部署
+## Verify Deployment
 
-### 1. 检查 CloudFormation 堆栈
+### 1. Check CloudFormation Stack
 
 ```bash
 aws cloudformation describe-stacks \
@@ -188,96 +188,96 @@ aws cloudformation describe-stacks \
   --query 'Stacks[0].Outputs'
 ```
 
-### 2. 验证 ECS 服务
+### 2. Verify ECS Services
 
 ```bash
-# 查看集群
+# View cluster
 aws ecs describe-clusters --clusters fargate-spot-cluster
 
-# 查看服务
+# View services
 aws ecs describe-services \
   --cluster fargate-spot-cluster \
   --services sample-app sample-app-standard
 ```
 
-### 3. 验证 Lambda 函数
+### 3. Verify Lambda Functions
 
 ```bash
-# 列出所有 Lambda 函数
+# List all Lambda functions
 aws lambda list-functions \
   --query 'Functions[?starts_with(FunctionName, `EcsFargateSpotFailoverStack`)].FunctionName'
 
-# 测试 Spot Error Detector
+# Test Spot Error Detector
 aws lambda invoke \
   --function-name EcsFargateSpotFailoverStack-SpotErrorDetectorXXXX \
   --payload '{}' \
   /dev/stdout
 ```
 
-### 4. 验证 DynamoDB 表
+### 4. Verify DynamoDB Table
 
 ```bash
-# 查看表结构
+# View table structure
 aws dynamodb describe-table \
   --table-name fargate-spot-error-counter
 
-# 扫描表内容
+# Scan table contents
 aws dynamodb scan \
   --table-name fargate-spot-error-counter
 ```
 
-### 5. 验证 EventBridge 规则
+### 5. Verify EventBridge Rules
 
 ```bash
-# 列出规则
+# List rules
 aws events list-rules \
   --name-prefix EcsFargateSpotFailoverStack
 
-# 查看规则详情
+# View rule details
 aws events describe-rule \
   --name EcsFargateSpotFailoverStack-EcsTaskStateChangeRuleXXXX
 ```
 
-### 6. 访问示例应用
+### 6. Access Sample Application
 
 ```bash
-# 获取负载均衡器 DNS
+# Get Load Balancer DNS
 ALB_DNS=$(aws cloudformation describe-stacks \
   --stack-name EcsFargateSpotFailoverStack \
   --query 'Stacks[0].Outputs[?OutputKey==`LoadBalancerDNS`].OutputValue' \
   --output text)
 
-# 测试访问
+# Test access
 curl http://$ALB_DNS
 ```
 
-## 配置告警通知
+## Configure Alert Notifications
 
-### 邮件通知
+### Email Notifications
 
 ```bash
-# 获取 SNS Topic ARN
+# Get SNS Topic ARN
 TOPIC_ARN=$(aws cloudformation describe-stacks \
   --stack-name EcsFargateSpotFailoverStack \
   --query 'Stacks[0].Outputs[?OutputKey==`NotificationTopicArn`].OutputValue' \
   --output text)
 
-# 订阅邮件
+# Subscribe email
 aws sns subscribe \
   --topic-arn $TOPIC_ARN \
   --protocol email \
   --notification-endpoint your-email@example.com
 
-# 确认订阅（查收邮件并点击确认链接）
+# Confirm subscription (check email and click confirmation link)
 ```
 
-### Slack 通知
+### Slack Notifications
 
-1. 创建 Slack Webhook：[Slack API](https://api.slack.com/messaging/webhooks)
-2. 创建 Lambda 函数处理 SNS 消息并发送到 Slack
-3. 订阅 SNS Topic 到该 Lambda
+1. Create Slack Webhook: [Slack API](https://api.slack.com/messaging/webhooks)
+2. Create Lambda function to process SNS messages and send to Slack
+3. Subscribe SNS Topic to this Lambda
 
-### SMS 通知
+### SMS Notifications
 
 ```bash
 aws sns subscribe \
@@ -286,29 +286,29 @@ aws sns subscribe \
   --notification-endpoint +1234567890
 ```
 
-## 多环境部署
+## Multi-Environment Deployment
 
-### 开发环境
+### Development Environment
 
 ```bash
-# 使用 CDK 环境变量
+# Use CDK environment variables
 export CDK_DEFAULT_ACCOUNT=123456789012
 export CDK_DEFAULT_REGION=us-east-1
 
-# 部署到开发环境
+# Deploy to development environment
 cdk deploy -c env=dev
 ```
 
-### 生产环境
+### Production Environment
 
 ```bash
-# 使用不同的栈名称
+# Use different stack name
 cdk deploy EcsFargateSpotFailoverStack-Prod \
   -c env=prod \
   -c sampleAppDesiredCount=4
 ```
 
-### 使用 cdk.json 配置
+### Using cdk.json Configuration
 
 ```json
 {
@@ -320,119 +320,119 @@ cdk deploy EcsFargateSpotFailoverStack-Prod \
 }
 ```
 
-## 故障排除
+## Troubleshooting
 
-### 部署失败
+### Deployment Failures
 
-#### 1. CDK 引导未执行
+#### 1. CDK Bootstrap Not Executed
 
 ```
 Error: This stack uses assets, so the toolkit stack must be deployed to the environment
 ```
 
-**解决**:
+**Solution**:
 ```bash
 cdk bootstrap aws://<ACCOUNT_ID>/<REGION>
 ```
 
-#### 2. IAM 权限不足
+#### 2. Insufficient IAM Permissions
 
 ```
 API: iam:CreateRole User: xxx is not authorized to perform: iam:CreateRole
 ```
 
-**解决**: 确保 IAM 用户/角色有足够的权限
+**Solution**: Ensure IAM user/role has sufficient permissions
 
-#### 3. 资源名称冲突
+#### 3. Resource Name Conflict
 
 ```
 AlreadyExistsException: Stack already exists
 ```
 
-**解决**: 使用不同的栈名称或先删除现有堆栈
+**Solution**: Use a different stack name or delete the existing stack first
 
-### 运行时问题
+### Runtime Issues
 
-#### Lambda 函数超时
+#### Lambda Function Timeout
 
-检查 CloudWatch Logs:
+Check CloudWatch Logs:
 ```bash
 aws logs tail "/aws/lambda/EcsFargateSpotFailoverStack-FargateFailbackOrchestrator" --follow
 ```
 
-**可能原因**:
-- ECS 服务启动时间过长
-- 网络连接问题
+**Possible Causes**:
+- ECS service startup taking too long
+- Network connectivity issues
 
-**解决**: 增加 Lambda timeout 或调整 `SERVICE_STABLE_TIMEOUT`
+**Solution**: Increase Lambda timeout or adjust `SERVICE_STABLE_TIMEOUT`
 
-#### EventBridge 未触发
+#### EventBridge Not Triggering
 
 ```bash
-# 检查规则状态
+# Check rule status
 aws events describe-rule --name <rule-name>
 
-# 检查目标配置
+# Check target configuration
 aws events list-targets-by-rule --rule <rule-name>
 ```
 
-#### DynamoDB 访问失败
+#### DynamoDB Access Failure
 
-检查 Lambda 执行角色的 IAM 策略是否包含 DynamoDB 访问权限。
+Check if Lambda execution role's IAM policy includes DynamoDB access permissions.
 
-## 更新部署
+## Update Deployment
 
-### 更新代码后重新部署
+### Redeploy After Code Updates
 
 ```bash
-# 拉取最新代码
+# Pull latest code
 git pull origin main
 
-# 重新安装依赖（如有更新）
+# Reinstall dependencies (if updated)
 npm install
 
-# 编译并部署
+# Compile and deploy
 npm run build && npm run deploy
 ```
 
-### 部分更新
+### Partial Update
 
 ```bash
-# 只更新 Lambda 代码
+# Update only Lambda code
 npm run build
 cdk deploy --hotswap
 
-# 注意：--hotswap 不适用于基础设施变更
+# Note: --hotswap does not work for infrastructure changes
 ```
 
-## 回滚部署
+## Rollback Deployment
 
-### 使用 CloudFormation 回滚
+### Using CloudFormation Rollback
 
 ```bash
-# 查看堆栈历史
+# View stack history
 aws cloudformation describe-stack-events \
   --stack-name EcsFargateSpotFailoverStack
 
-# 回滚到特定版本（如果有）
+# Rollback to specific version (if available)
 aws cloudformation rollback-stack \
   --stack-name EcsFargateSpotFailoverStack
 ```
 
-### 使用 CDK 销毁并重建
+### Using CDK Destroy and Rebuild
 
 ```bash
-# 销毁
+# Destroy
 cdk destroy
 
-# 重新部署
+# Redeploy
 cdk deploy
 ```
 
-## 下一步
+## Next Steps
 
-部署完成后，请参考以下文档：
+After deployment is complete, please refer to the following documentation:
 
-- [执行指南](execution-guide.md) - 了解系统如何运行
-- [测试指南](testing-guide.md) - 测试故障转移功能
-- [运维手册](operations-manual.md) - 日常运维操作
+- [Execution Guide](execution-guide.md) - Learn how the system operates
+- [Testing Guide](testing-guide.md) - Test the failover functionality
+- [Operations Manual](operations-manual.md) - Daily operations

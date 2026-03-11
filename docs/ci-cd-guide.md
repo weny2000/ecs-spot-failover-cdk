@@ -1,135 +1,135 @@
-# CI/CD 指南
+# CI/CD Guide
 
-本指南介绍 ECS Fargate Spot Failover 项目的持续集成和持续部署配置。
+This guide describes the Continuous Integration and Continuous Deployment configuration for the ECS Fargate Spot Failover project.
 
-## 目录
+## Table of Contents
 
-- [概述](#概述)
-- [工作流说明](#工作流说明)
-- [环境配置](#环境配置)
-- [Secrets 配置](#secrets-配置)
-- [部署流程](#部署流程)
-- [故障排除](#故障排除)
+- [Overview](#overview)
+- [Workflow Descriptions](#workflow-descriptions)
+- [Environment Configuration](#environment-configuration)
+- [Secrets Configuration](#secrets-configuration)
+- [Deployment Process](#deployment-process)
+- [Troubleshooting](#troubleshooting)
 
-## 概述
+## Overview
 
-项目使用 GitHub Actions 实现完整的 CI/CD 流水线，包括：
+The project uses GitHub Actions to implement a complete CI/CD pipeline, including:
 
-- **CI (持续集成)**: 代码质量检查、单元测试、构建
-- **CD (持续部署)**: 自动部署到开发/预发布/生产环境
-- **PR 检查**: Pull Request 时的自动化检查
-- **发布管理**: 版本发布和工件管理
+- **CI (Continuous Integration)**: Code quality checks, unit tests, and builds
+- **CD (Continuous Deployment)**: Automated deployment to development/staging/production environments
+- **PR Checks**: Automated checks for Pull Requests
+- **Release Management**: Version releases and artifact management
 
-## 工作流说明
+## Workflow Descriptions
 
-### 1. CI 工作流 (`.github/workflows/ci.yml`)
+### 1. CI Workflow (`.github/workflows/ci.yml`)
 
-**触发条件**:
-- Push 到 `main` 或 `develop` 分支
-- Pull Request 到 `main` 或 `develop` 分支
+**Triggers**:
+- Push to `main` or `develop` branch
+- Pull Request to `main` or `develop` branch
 
-**任务**:
-| 任务 | 说明 |
+**Jobs**:
+| Job | Description |
 |------|------|
-| lint-and-format | ESLint 和 Prettier 检查 |
-| type-check | TypeScript 类型检查 |
-| test | 运行单元测试并生成覆盖率报告 |
-| build | 构建项目并上传工件 |
-| cdk-synth | 合成 CloudFormation 模板 |
+| lint-and-format | ESLint and Prettier checks |
+| type-check | TypeScript type checking |
+| test | Run unit tests and generate coverage reports |
+| build | Build the project and upload artifacts |
+| cdk-synth | Synthesize CloudFormation templates |
 
-### 2. PR 检查 (`.github/workflows/pr.yml`)
+### 2. PR Checks (`.github/workflows/pr.yml`)
 
-**触发条件**:
-- Pull Request 创建或更新
+**Triggers**:
+- Pull Request creation or update
 
-**任务**:
-| 任务 | 说明 |
+**Jobs**:
+| Job | Description |
 |------|------|
-| lint | 代码风格检查 |
-| test | 单元测试和覆盖率报告 |
-| build | TypeScript 编译和构建 |
-| cdk-diff | 生成基础设施变更对比 |
-| security-scan | 安全漏洞扫描 |
-| pr-size-check | PR 大小检查 |
-| conventional-commits | 提交消息规范检查 |
+| lint | Code style check |
+| test | Unit tests and coverage reports |
+| build | TypeScript compilation and build |
+| cdk-diff | Generate infrastructure change comparison |
+| security-scan | Security vulnerability scanning |
+| pr-size-check | PR size check |
+| conventional-commits | Commit message convention check |
 
-### 3. 开发环境部署 (`.github/workflows/cd-dev.yml`)
+### 3. Development Environment Deployment (`.github/workflows/cd-dev.yml`)
 
-**触发条件**:
-- Push 到 `develop` 分支
-- 手动触发 (workflow_dispatch)
+**Triggers**:
+- Push to `develop` branch
+- Manual trigger (workflow_dispatch)
 
-**任务**:
-| 任务 | 说明 |
+**Jobs**:
+| Job | Description |
 |------|------|
-| deploy | 部署到 AWS 开发账户 |
-| smoke-test | 冒烟测试验证部署 |
+| deploy | Deploy to AWS development account |
+| smoke-test | Smoke test verification after deployment |
 
-### 4. 预发布环境部署 (`.github/workflows/cd-staging.yml`)
+### 4. Staging Environment Deployment (`.github/workflows/cd-staging.yml`)
 
-**触发条件**:
-- Push 到 `main` 分支
-- 手动触发
+**Triggers**:
+- Push to `main` branch
+- Manual trigger
 
-**任务**:
-| 任务 | 说明 |
+**Jobs**:
+| Job | Description |
 |------|------|
-| approval-check | 审批检查 |
-| deploy | 部署到 AWS 预发布账户 |
-| integration-test | 集成测试 |
+| approval-check | Approval check |
+| deploy | Deploy to AWS staging account |
+| integration-test | Integration testing |
 
-### 5. 生产环境部署 (`.github/workflows/cd-prod.yml`)
+### 5. Production Environment Deployment (`.github/workflows/cd-prod.yml`)
 
-**触发条件**:
-- 仅手动触发 (workflow_dispatch)
-- 需要输入版本标签
+**Triggers**:
+- Manual trigger only (workflow_dispatch)
+- Version tag input required
 
-**任务**:
-| 任务 | 说明 |
+**Jobs**:
+| Job | Description |
 |------|------|
-| pre-deployment-check | 部署前验证 |
-| deploy | 部署到 AWS 生产账户 |
-| smoke-test | 生产环境冒烟测试 |
-| notify-failure | 失败时通知 |
+| pre-deployment-check | Pre-deployment verification |
+| deploy | Deploy to AWS production account |
+| smoke-test | Production environment smoke test |
+| notify-failure | Notification on failure |
 
-**注意**: 生产部署需要 GitHub Environment 的审批。
+**Note**: Production deployment requires GitHub Environment approval.
 
-### 6. 发布工作流 (`.github/workflows/release.yml`)
+### 6. Release Workflow (`.github/workflows/release.yml`)
 
-**触发条件**:
-- 推送符合 `v*.*.*` 格式的标签
+**Triggers**:
+- Push of tags matching `v*.*.*` format
 
-**任务**:
-| 任务 | 说明 |
+**Jobs**:
+| Job | Description |
 |------|------|
-| verify | 验证标签格式和 CHANGELOG |
-| build-release | 构建发布工件 |
-| create-release | 创建 GitHub Release |
-| publish-npm | 发布到 NPM (可选) |
-| notify | 发送通知 |
+| verify | Verify tag format and CHANGELOG |
+| build-release | Build release artifacts |
+| create-release | Create GitHub Release |
+| publish-npm | Publish to NPM (optional) |
+| notify | Send notifications |
 
-## 环境配置
+## Environment Configuration
 
 ### GitHub Environments
 
-在仓库设置中创建以下环境：
+Create the following environments in your repository settings:
 
 1. **development**
-   - 不需要保护规则
-   - 用于开发环境部署
+   - No protection rules required
+   - Used for development environment deployment
 
 2. **staging**
-   - 需要 1 个审批
-   - 用于预发布环境部署
+   - Requires 1 approval
+   - Used for staging environment deployment
 
 3. **production**
-   - 需要 2 个审批
-   - 部署超时时间：30 分钟
-   - 用于生产环境部署
+   - Requires 2 approvals
+   - Deployment timeout: 30 minutes
+   - Used for production environment deployment
 
-### AWS 账户设置
+### AWS Account Setup
 
-每个环境需要独立的 AWS 账户：
+Each environment requires a separate AWS account:
 
 ```
 ┌─────────────────┐
@@ -150,34 +150,34 @@
 └─────────────────┘
 ```
 
-## Secrets 配置
+## Secrets Configuration
 
-在 GitHub 仓库 Settings > Secrets and variables > Actions 中添加：
+Add the following in GitHub repository Settings > Secrets and variables > Actions:
 
-### AWS 相关
+### AWS Related
 
-| Secret | 说明 | 示例 |
-|--------|------|------|
-| `AWS_ROLE_ARN_DEV` | 开发环境 IAM Role ARN | `arn:aws:iam::123456789012:role/GitHubActionsRole` |
-| `AWS_ACCOUNT_ID_DEV` | 开发环境账户 ID | `123456789012` |
-| `AWS_ROLE_ARN_STAGING` | 预发布环境 IAM Role ARN | `arn:aws:iam::234567890123:role/GitHubActionsRole` |
-| `AWS_ACCOUNT_ID_STAGING` | 预发布环境账户 ID | `234567890123` |
-| `AWS_ROLE_ARN_PROD` | 生产环境 IAM Role ARN | `arn:aws:iam::345678901234:role/GitHubActionsRole` |
-| `AWS_ACCOUNT_ID_PROD` | 生产环境账户 ID | `345678901234` |
+| Secret | Description | Example |
+|--------|-------------|---------|
+| `AWS_ROLE_ARN_DEV` | Development environment IAM Role ARN | `arn:aws:iam::123456789012:role/GitHubActionsRole` |
+| `AWS_ACCOUNT_ID_DEV` | Development environment account ID | `123456789012` |
+| `AWS_ROLE_ARN_STAGING` | Staging environment IAM Role ARN | `arn:aws:iam::234567890123:role/GitHubActionsRole` |
+| `AWS_ACCOUNT_ID_STAGING` | Staging environment account ID | `234567890123` |
+| `AWS_ROLE_ARN_PROD` | Production environment IAM Role ARN | `arn:aws:iam::345678901234:role/GitHubActionsRole` |
+| `AWS_ACCOUNT_ID_PROD` | Production environment account ID | `345678901234` |
 
-### 其他集成
+### Other Integrations
 
-| Secret | 说明 | 获取方式 |
-|--------|------|----------|
-| `CODECOV_TOKEN` | Codecov 覆盖率上传令牌 | [Codecov](https://codecov.io/) |
-| `SLACK_WEBHOOK_URL` | Slack 通知 Webhook | Slack App |
-| `NPM_TOKEN` | NPM 发布令牌 | [NPM](https://www.npmjs.com/) |
+| Secret | Description | How to Obtain |
+|--------|-------------|---------------|
+| `CODECOV_TOKEN` | Codecov coverage upload token | [Codecov](https://codecov.io/) |
+| `SLACK_WEBHOOK_URL` | Slack notification webhook | Slack App |
+| `NPM_TOKEN` | NPM publish token | [NPM](https://www.npmjs.com/) |
 
-### 在 AWS 中配置 OIDC
+### Configuring OIDC in AWS
 
-GitHub Actions 使用 OIDC 与 AWS 集成，无需存储长期凭证。
+GitHub Actions uses OIDC to integrate with AWS without storing long-term credentials.
 
-**1. 创建 IAM OIDC 身份提供商**:
+**1. Create IAM OIDC Identity Provider**:
 
 ```bash
 aws iam create-open-id-connect-provider \
@@ -186,7 +186,7 @@ aws iam create-open-id-connect-provider \
   --client-id-list sts.amazonaws.com
 ```
 
-**2. 创建 IAM Role**:
+**2. Create IAM Role**:
 
 ```json
 {
@@ -211,7 +211,7 @@ aws iam create-open-id-connect-provider \
 }
 ```
 
-**3. 附加权限策略**:
+**3. Attach Permission Policy**:
 
 ```json
 {
@@ -237,64 +237,64 @@ aws iam create-open-id-connect-provider \
 }
 ```
 
-## 部署流程
+## Deployment Process
 
-### 开发环境部署
+### Development Environment Deployment
 
 ```bash
-# 方式 1: 推送到 develop 分支
+# Method 1: Push to develop branch
 git checkout develop
 git merge feature/your-feature
 git push origin develop
 
-# 方式 2: 手动触发
-# 在 GitHub Actions 页面选择 "CD - Development" 工作流，点击 "Run workflow"
+# Method 2: Manual trigger
+# In GitHub Actions page, select "CD - Development" workflow, click "Run workflow"
 ```
 
-### 预发布环境部署
+### Staging Environment Deployment
 
 ```bash
-# 推送到 main 分支
+# Push to main branch
 git checkout main
 git merge develop
 git push origin main
 ```
 
-### 生产环境部署
+### Production Environment Deployment
 
 ```bash
-# 1. 创建并推送标签
+# 1. Create and push tag
 git checkout main
 git tag -a v1.0.0 -m "Release version 1.0.0"
 git push origin v1.0.0
 
-# 2. 在 GitHub Actions 页面选择 "CD - Production"
-# 3. 输入版本标签 (v1.0.0)
-# 4. 等待审批
-# 5. 部署执行
+# 2. In GitHub Actions page, select "CD - Production"
+# 3. Enter version tag (v1.0.0)
+# 4. Wait for approval
+# 5. Deployment executes
 ```
 
-## 版本管理
+## Version Management
 
-### 语义化版本
+### Semantic Versioning
 
-项目使用 [Semantic Versioning](https://semver.org/):
+The project uses [Semantic Versioning](https://semver.org/):
 
-- **MAJOR**: 不兼容的 API 变更
-- **MINOR**: 向后兼容的功能添加
-- **PATCH**: 向后兼容的问题修复
+- **MAJOR**: Incompatible API changes
+- **MINOR**: Backward-compatible feature additions
+- **PATCH**: Backward-compatible bug fixes
 
-### 发布流程
+### Release Process
 
-1. 更新 `CHANGELOG.md`
-2. 创建 PR 到 main 分支
-3. 合并后创建标签: `git tag -a v1.0.0 -m "Release v1.0.0"`
-4. 推送标签: `git push origin v1.0.0`
-5. 自动触发发布工作流
+1. Update `CHANGELOG.md`
+2. Create PR to main branch
+3. After merging, create tag: `git tag -a v1.0.0 -m "Release v1.0.0"`
+4. Push tag: `git push origin v1.0.0`
+5. Release workflow is automatically triggered
 
-## 提交消息规范
+## Commit Message Convention
 
-使用 [Conventional Commits](https://www.conventionalcommits.org/):
+Using [Conventional Commits](https://www.conventionalcommits.org/):
 
 ```
 <type>(<scope>): <subject>
@@ -304,18 +304,18 @@ git push origin v1.0.0
 [optional footer]
 ```
 
-**类型**:
-- `feat`: 新功能
-- `fix`: 错误修复
-- `docs`: 文档更新
-- `style`: 代码格式（不影响功能）
-- `refactor`: 代码重构
-- `perf`: 性能优化
-- `test`: 测试相关
-- `chore`: 构建/工具相关
-- `ci`: CI/CD 相关
+**Types**:
+- `feat`: New feature
+- `fix`: Bug fix
+- `docs`: Documentation update
+- `style`: Code formatting (no functional changes)
+- `refactor`: Code refactoring
+- `perf`: Performance optimization
+- `test`: Test related
+- `chore`: Build/tool related
+- `ci`: CI/CD related
 
-**示例**:
+**Examples**:
 ```
 feat(lambda): add support for multiple services
 
@@ -324,102 +324,102 @@ docs: update deployment guide
 ci: add production deployment workflow
 ```
 
-## 故障排除
+## Troubleshooting
 
-### 常见问题
+### Common Issues
 
-#### 1. AWS 凭证错误
+#### 1. AWS Credential Error
 
 ```
 Error: Could not assume role with OIDC
 ```
 
-**解决**:
-- 检查 IAM Role 的 Trust Policy 是否正确
-- 确认 `AWS_ROLE_ARN_*` secrets 配置正确
-- 验证 OIDC Provider 是否已创建
+**Solution**:
+- Check if IAM Role's Trust Policy is correct
+- Confirm `AWS_ROLE_ARN_*` secrets are configured correctly
+- Verify OIDC Provider has been created
 
-#### 2. CDK 引导错误
+#### 2. CDK Bootstrap Error
 
 ```
 Error: This stack uses assets, so the toolkit stack must be deployed
 ```
 
-**解决**:
+**Solution**:
 ```bash
-# 手动执行引导
+# Execute bootstrap manually
 cdk bootstrap aws://ACCOUNT_ID/REGION
 ```
 
-#### 3. 部署权限不足
+#### 3. Insufficient Deployment Permissions
 
 ```
 API: iam:CreateRole User: xxx is not authorized
 ```
 
-**解决**: 为 GitHub Actions Role 添加 `iam:*` 权限或更细粒度的权限。
+**Solution**: Add `iam:*` permissions or more granular permissions to the GitHub Actions Role.
 
-#### 4. 测试失败
+#### 4. Test Failures
 
 ```
 Test suite failed to run
 ```
 
-**解决**:
+**Solution**:
 ```bash
-# 本地运行测试
+# Run tests locally
 npm ci
 npm test
 ```
 
-### 调试工作流
+### Debugging Workflows
 
-1. **启用调试日志**:
+1. **Enable Debug Logging**:
    ```yaml
    env:
      ACTIONS_STEP_DEBUG: true
      ACTIONS_RUNNER_DEBUG: true
    ```
 
-2. **查看详细输出**:
-   - 在 GitHub Actions 页面点击失败的 job
-   - 展开步骤查看详细日志
+2. **View Detailed Output**:
+   - Click on the failed job in GitHub Actions page
+   - Expand steps to view detailed logs
 
-3. **本地复现**:
+3. **Local Reproduction**:
    ```bash
-   # 使用 act 工具本地运行
+   # Use act tool to run locally
    act -j test
    ```
 
-### 回滚部署
+### Rollback Deployment
 
-如果生产部署失败：
+If production deployment fails:
 
 ```bash
-# 使用 AWS CLI 回滚 CloudFormation 堆栈
+# Use AWS CLI to rollback CloudFormation stack
 aws cloudformation rollback-stack \
   --stack-name EcsFargateSpotFailoverStack
 
-# 或使用 CDK
+# Or use CDK
 cdk destroy --force
 git checkout <previous-tag>
 cdk deploy
 ```
 
-## 最佳实践
+## Best Practices
 
-1. **分支保护**:
-   - `main` 分支需要 PR 审查
-   - 所有检查必须通过才能合并
+1. **Branch Protection**:
+   - `main` branch requires PR review
+   - All checks must pass before merging
 
-2. **审批流程**:
-   - 预发布环境: 1 人审批
-   - 生产环境: 2 人审批
+2. **Approval Process**:
+   - Staging environment: 1 person approval
+   - Production environment: 2 person approval
 
-3. **监控**:
-   - 部署后自动运行冒烟测试
-   - 失败时自动发送通知
+3. **Monitoring**:
+   - Automatic smoke tests after deployment
+   - Automatic notifications on failure
 
-4. **文档**:
-   - 每个版本更新 CHANGELOG
-   - 重大变更更新 README
+4. **Documentation**:
+   - Update CHANGELOG for each version
+   - Update README for major changes

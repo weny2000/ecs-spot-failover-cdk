@@ -1,123 +1,123 @@
-# 测试指南
+# Testing Guide
 
-本指南介绍如何对 ECS Fargate Spot Failover 解决方案进行测试。
+This guide explains how to test the ECS Fargate Spot Failover solution.
 
-## 目录
+## Table of Contents
 
-- [单元测试](#单元测试)
-- [集成测试](#集成测试)
-- [端到端测试](#端到端测试)
-- [性能测试](#性能测试)
-- [手动测试故障转移](#手动测试故障转移)
+- [Unit Testing](#unit-testing)
+- [Integration Testing](#integration-testing)
+- [End-to-End Testing](#end-to-end-testing)
+- [Performance Testing](#performance-testing)
+- [Manual Failover Testing](#manual-failover-testing)
 
-## 单元测试
+## Unit Testing
 
-### 运行测试
+### Running Tests
 
 ```bash
-# 运行所有测试
+# Run all tests
 npm test
 
-# 运行单元测试
+# Run unit tests
 npm run test:unit
 
-# 带覆盖率报告
+# With coverage report
 npm run test:coverage
 
-# 监视模式（开发时使用）
+# Watch mode (for development)
 npm run test:watch
 ```
 
-### 测试结构
+### Test Structure
 
 ```
 test/
-├── setup.ts                    # Jest 全局设置
-├── __mocks__/                  # Mock 函数
+├── setup.ts                    # Jest global setup
+├── __mocks__/                  # Mock functions
 │   └── aws-sdk-client-mock.ts
 └── unit/
-    ├── lambda/                 # Lambda 函数测试
+    ├── lambda/                 # Lambda function tests
     │   ├── cleanup-orchestrator.test.ts
     │   ├── fargate-failback-orchestrator.test.ts
     │   ├── spot-error-detector.test.ts
     │   └── spot-success-monitor.test.ts
-    └── stacks/                 # CDK 堆栈测试
+    └── stacks/                 # CDK stack tests
         └── ecs-fargate-spot-failover-stack.test.ts
 ```
 
-### Lambda 函数测试覆盖
+### Lambda Function Test Coverage
 
 #### Spot Error Detector
 
-测试场景：
-- ✅ 事件验证（无 detail、非 STOPPED 状态、非 Spot 错误）
-- ✅ 错误检测（SpotInterruption、ResourcesNotAvailable、insufficient capacity）
-- ✅ 错误计数递增
-- ✅ 服务名称提取
-- ✅ 故障转移触发（达到阈值、已活跃、未达阈值）
-- ✅ 错误处理
+Test scenarios:
+- ✅ Event validation (no detail, non-STOPPED status, non-Spot errors)
+- ✅ Error detection (SpotInterruption, ResourcesNotAvailable, insufficient capacity)
+- ✅ Error counter increment
+- ✅ Service name extraction
+- ✅ Failover trigger (threshold reached, already active, threshold not reached)
+- ✅ Error handling
 
 #### Fargate Failback Orchestrator
 
-测试场景：
-- ✅ 事件解析（直接调用、EventBridge 格式、环境变量回退）
-- ✅ 跳过条件（故障转移已活跃）
-- ✅ 故障转移执行：
-  - 启动标准服务
-  - 停止 Spot 服务
-  - 更新 DynamoDB 状态
-  - 重置错误计数
-  - 发送通知
-- ✅ 错误处理
+Test scenarios:
+- ✅ Event parsing (direct invocation, EventBridge format, environment variable fallback)
+- ✅ Skip conditions (failover already active)
+- ✅ Failover execution:
+  - Start standard service
+  - Stop Spot service
+  - Update DynamoDB status
+  - Reset error counter
+  - Send notification
+- ✅ Error handling
 
 #### Cleanup Orchestrator
 
-测试场景：
-- ✅ 事件解析
-- ✅ 跳过条件（无故障转移状态、故障转移未活跃）
-- ✅ 清理延迟
-- ✅ 恢复执行：
-  - 恢复 Spot 服务
-  - 停止标准服务
-  - 更新 DynamoDB
-  - 重置错误计数
-  - 发送通知
-- ✅ 超时处理
-- ✅ 错误处理
+Test scenarios:
+- ✅ Event parsing
+- ✅ Skip conditions (no failover status, failover not active)
+- ✅ Cleanup delay
+- ✅ Recovery execution:
+  - Restore Spot service
+  - Stop standard service
+  - Update DynamoDB
+  - Reset error counter
+  - Send notification
+- ✅ Timeout handling
+- ✅ Error handling
 
 #### Spot Success Monitor
 
-测试场景：
-- ✅ 事件验证
-- ✅ Spot 任务检测（容量提供者、组名）
-- ✅ 错误计数重置
-- ✅ 恢复触发（活跃、进行中、未活跃）
-- ✅ 服务名称提取
-- ✅ 错误处理
+Test scenarios:
+- ✅ Event validation
+- ✅ Spot task detection (capacity provider, group name)
+- ✅ Error counter reset
+- ✅ Recovery trigger (active, in-progress, not active)
+- ✅ Service name extraction
+- ✅ Error handling
 
-### CDK 堆栈测试
+### CDK Stack Tests
 
-测试内容：
-- ✅ VPC 配置（CIDR、子网、NAT Gateway）
-- ✅ ECS 集群（容量提供者）
-- ✅ DynamoDB 表（Schema、计费模式）
+Test contents:
+- ✅ VPC configuration (CIDR, subnets, NAT Gateway)
+- ✅ ECS cluster (capacity providers)
+- ✅ DynamoDB table (Schema, billing mode)
 - ✅ SNS Topic
-- ✅ Lambda 函数（配置、环境变量）
-- ✅ IAM 角色（权限策略）
-- ✅ EventBridge 规则（事件模式、目标）
-- ✅ ECS 服务（任务定义、容量策略）
-- ✅ ALB（监听器、目标组）
-- ✅ 配置选项（createSampleApp、desiredCount、appPort）
+- ✅ Lambda functions (configuration, environment variables)
+- ✅ IAM roles (permission policies)
+- ✅ EventBridge rules (event patterns, targets)
+- ✅ ECS services (task definitions, capacity strategies)
+- ✅ ALB (listeners, target groups)
+- ✅ Configuration options (createSampleApp, desiredCount, appPort)
 
-## 集成测试
+## Integration Testing
 
-### 前置条件
+### Prerequisites
 
 ```bash
-# 部署测试环境
+# Deploy test environment
 npm run deploy
 
-# 获取输出
+# Get outputs
 export CLUSTER_NAME=$(aws cloudformation describe-stacks \
   --stack-name EcsFargateSpotFailoverStack \
   --query 'Stacks[0].Outputs[?OutputKey==`ClusterName`].OutputValue' \
@@ -134,10 +134,10 @@ export STANDARD_SERVICE=$(aws cloudformation describe-stacks \
   --output text)
 ```
 
-### 测试 DynamoDB 集成
+### Testing DynamoDB Integration
 
 ```bash
-# 插入测试数据
+# Insert test data
 aws dynamodb put-item \
   --table-name fargate-spot-error-counter \
   --item '{
@@ -146,26 +146,26 @@ aws dynamodb put-item \
     "failover_state": {"M": {"failover_active": {"BOOL": false}}}
   }'
 
-# 查询数据
+# Query data
 aws dynamodb get-item \
   --table-name fargate-spot-error-counter \
   --key '{"service_name": {"S": "test-service"}}'
 
-# 删除测试数据
+# Delete test data
 aws dynamodb delete-item \
   --table-name fargate-spot-error-counter \
   --key '{"service_name": {"S": "test-service"}}'
 ```
 
-### 测试 Lambda 集成
+### Testing Lambda Integration
 
 ```bash
-# 获取 Lambda 函数名
+# Get Lambda function name
 DETECTOR_NAME=$(aws lambda list-functions \
   --query 'Functions[?contains(FunctionName, `SpotErrorDetector`)].FunctionName' \
   --output text)
 
-# 测试事件
+# Test event
 aws lambda invoke \
   --function-name $DETECTOR_NAME \
   --payload '{
@@ -180,25 +180,25 @@ aws lambda invoke \
   /dev/stdout
 ```
 
-### 测试 SNS 集成
+### Testing SNS Integration
 
 ```bash
-# 获取 Topic ARN
+# Get Topic ARN
 TOPIC_ARN=$(aws cloudformation describe-stacks \
   --stack-name EcsFargateSpotFailoverStack \
   --query 'Stacks[0].Outputs[?OutputKey==`NotificationTopicArn`].OutputValue' \
   --output text)
 
-# 发布测试消息
+# Publish test message
 aws sns publish \
   --topic-arn $TOPIC_ARN \
   --subject "Test Notification" \
   --message "This is a test message"
 ```
 
-## 端到端测试
+## End-to-End Testing
 
-### 完整故障转移测试
+### Complete Failover Test
 
 ```bash
 #!/bin/bash
@@ -206,13 +206,13 @@ aws sns publish \
 
 echo "=== Starting Failover Test ==="
 
-# 1. 确认初始状态
+# 1. Confirm initial state
 echo "Checking initial state..."
 aws ecs describe-services \
   --cluster $CLUSTER_NAME \
   --services $SPOT_SERVICE $STANDARD_SERVICE
 
-# 2. 手动触发 Spot 服务错误（通过停止任务）
+# 2. Manually trigger Spot service errors (by stopping tasks)
 echo "Stopping Spot tasks to simulate failures..."
 for i in {1..3}; do
   TASKS=$(aws ecs list-tasks \
@@ -231,28 +231,28 @@ for i in {1..3}; do
   sleep 10
 done
 
-# 3. 等待故障转移
+# 3. Wait for failover
 echo "Waiting for failover..."
 sleep 120
 
-# 4. 验证标准服务已启动
+# 4. Verify standard service is running
 echo "Verifying standard service is running..."
 aws ecs describe-services \
   --cluster $CLUSTER_NAME \
   --service-name $STANDARD_SERVICE
 
-# 5. 恢复 Spot 服务
+# 5. Restore Spot service
 echo "Restoring Spot service..."
 aws ecs update-service \
   --cluster $CLUSTER_NAME \
   --service $SPOT_SERVICE \
   --desired-count 2
 
-# 6. 等待恢复
+# 6. Wait for recovery
 echo "Waiting for recovery..."
 sleep 120
 
-# 7. 验证清理完成
+# 7. Verify cleanup completed
 echo "Verifying cleanup..."
 aws ecs describe-services \
   --cluster $CLUSTER_NAME \
@@ -261,12 +261,12 @@ aws ecs describe-services \
 echo "=== Test Complete ==="
 ```
 
-## 性能测试
+## Performance Testing
 
-### Lambda 冷启动测试
+### Lambda Cold Start Test
 
 ```bash
-# 强制冷启动并测量时间
+# Force cold start and measure time
 for i in {1..5}; do
   echo "Test $i:"
   time aws lambda invoke \
@@ -276,10 +276,10 @@ for i in {1..5}; do
 done
 ```
 
-### ECS 服务启动时间测试
+### ECS Service Startup Time Test
 
 ```bash
-# 测量服务启动时间
+# Measure service startup time
 START_TIME=$(date +%s)
 
 aws ecs update-service \
@@ -287,7 +287,7 @@ aws ecs update-service \
   --service $STANDARD_SERVICE \
   --desired-count 2
 
-# 等待服务稳定
+# Wait for service stabilization
 aws ecs wait services-stable \
   --cluster $CLUSTER_NAME \
   --services $STANDARD_SERVICE
@@ -296,12 +296,12 @@ END_TIME=$(date +%s)
 echo "Startup time: $((END_TIME - START_TIME)) seconds"
 ```
 
-## 手动测试故障转移
+## Manual Failover Testing
 
-### 方法 1：停止 Spot 任务
+### Method 1: Stop Spot Tasks
 
 ```bash
-# 获取并停止 Spot 任务
+# Get and stop Spot tasks
 TASK=$(aws ecs list-tasks \
   --cluster $CLUSTER_NAME \
   --service-name $SPOT_SERVICE \
@@ -314,26 +314,26 @@ aws ecs stop-task \
   --reason "Manual test - SpotInterruption"
 ```
 
-### 方法 2：修改服务容量
+### Method 2: Modify Service Capacity
 
 ```bash
-# 模拟容量不足
+# Simulate insufficient capacity
 aws ecs update-service \
   --cluster $CLUSTER_NAME \
   --service $SPOT_SERVICE \
   --desired-count 0
 
-# 稍后恢复
+# Restore later
 aws ecs update-service \
   --cluster $CLUSTER_NAME \
   --service $SPOT_SERVICE \
   --desired-count 2
 ```
 
-### 方法 3：手动调用 Lambda
+### Method 3: Manually Invoke Lambda
 
 ```bash
-# 直接触发故障转移
+# Directly trigger failover
 FAILOVER_NAME=$(aws lambda list-functions \
   --query 'Functions[?contains(FunctionName, `FailbackOrchestrator`)].FunctionName' \
   --output text)
@@ -347,81 +347,81 @@ aws lambda invoke \
   /dev/stdout
 ```
 
-## 监控测试执行
+## Monitoring Test Execution
 
-### 实时日志监控
+### Real-time Log Monitoring
 
 ```bash
-# 监控所有相关日志
+# Monitor all related logs
 aws logs tail "/aws/lambda/EcsFargateSpotFailoverStack-SpotErrorDetector" --follow &
 aws logs tail "/aws/lambda/EcsFargateSpotFailoverStack-FargateFailbackOrchestrator" --follow &
 aws logs tail "/aws/lambda/EcsFargateSpotFailoverStack-SpotSuccessMonitor" --follow &
 aws logs tail "/aws/lambda/EcsFargateSpotFailoverStack-CleanupOrchestrator" --follow &
 
-# 监控 ECS 事件
+# Monitor ECS events
 aws ecs describe-services \
   --cluster $CLUSTER_NAME \
   --services $SPOT_SERVICE $STANDARD_SERVICE \
   --query 'services[].events[:3]'
 ```
 
-### DynamoDB 监控
+### DynamoDB Monitoring
 
 ```bash
-# 监视错误计数器变化
+# Watch error counter changes
 watch -n 5 'aws dynamodb scan --table-name fargate-spot-error-counter'
 ```
 
-## 测试检查清单
+## Testing Checklist
 
-### 部署前检查
+### Pre-deployment Checks
 
-- [ ] `npm run build` 成功
-- [ ] `npm test` 通过
-- [ ] `npm run synth` 生成有效模板
-- [ ] 代码审查完成
+- [ ] `npm run build` succeeds
+- [ ] `npm test` passes
+- [ ] `npm run synth` generates valid template
+- [ ] Code review completed
 
-### 部署后验证
+### Post-deployment Verification
 
-- [ ] CloudFormation 堆栈创建成功
-- [ ] ECS 服务运行正常
-- [ ] Lambda 函数可调用
-- [ ] EventBridge 规则启用
-- [ ] DynamoDB 表可访问
-- [ ] SNS Topic 可发布
-- [ ] ALB 健康检查通过
+- [ ] CloudFormation stack created successfully
+- [ ] ECS services running normally
+- [ ] Lambda functions invocable
+- [ ] EventBridge rules enabled
+- [ ] DynamoDB table accessible
+- [ ] SNS Topic publishable
+- [ ] ALB health checks passing
 
-### 功能测试
+### Functional Tests
 
-- [ ] 故障转移触发正常
-- [ ] 标准服务启动正常
-- [ ] Spot 服务停止正常
-- [ ] 恢复触发正常
-- [ ] 清理完成正常
-- [ ] 通知发送正常
+- [ ] Failover triggers correctly
+- [ ] Standard service starts correctly
+- [ ] Spot service stops correctly
+- [ ] Recovery triggers correctly
+- [ ] Cleanup completes correctly
+- [ ] Notifications sent correctly
 
-## 故障排除测试
+## Troubleshooting Tests
 
-### 测试错误场景
+### Testing Error Scenarios
 
 ```bash
-# 测试 DynamoDB 不可用时 Lambda 行为
+# Test Lambda behavior when DynamoDB is unavailable
 aws iam detach-role-policy \
   --role-name EcsFargateSpotFailoverStack-LambdaExecutionRole \
   --policy-arn arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
 
-# 执行测试
+# Execute test
 # ...
 
-# 恢复权限
+# Restore permissions
 aws iam attach-role-policy \
   --role-name EcsFargateSpotFailoverStack-LambdaExecutionRole \
   --policy-arn arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
 ```
 
-## 持续集成
+## Continuous Integration
 
-### GitHub Actions 示例
+### GitHub Actions Example
 
 ```yaml
 name: Test
@@ -452,10 +452,10 @@ jobs:
         uses: codecov/codecov-action@v3
 ```
 
-## 最佳实践
+## Best Practices
 
-1. **测试隔离**: 每个测试独立，不依赖其他测试状态
-2. **Mock 外部依赖**: AWS 服务使用 Mock，不实际调用
-3. **测试命名**: 描述性行为，如 `should trigger failover when threshold reached`
-4. **覆盖率**: 保持核心代码覆盖率 > 80%
-5. **持续集成**: 每次提交前运行完整测试套件
+1. **Test Isolation**: Each test should be independent and not depend on other test states
+2. **Mock External Dependencies**: Use mocks for AWS services without actual calls
+3. **Test Naming**: Use descriptive behavior names, such as `should trigger failover when threshold reached`
+4. **Coverage**: Maintain core code coverage > 80%
+5. **Continuous Integration**: Run full test suite before each commit

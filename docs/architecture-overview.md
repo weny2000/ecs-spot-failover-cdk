@@ -1,8 +1,8 @@
-# 架构概述
+# Architecture Overview
 
-> 💡 **可编辑架构图**: 我们在 [`docs/architecture/`](../docs/architecture/) 目录下提供了多种格式的架构图，支持 Draw.io、PlantUML 和 Mermaid，方便您查看和编辑。
+> 💡 **Editable Architecture Diagrams**: We provide architecture diagrams in multiple formats in the [`docs/architecture/`](../docs/architecture/) directory, supporting Draw.io, PlantUML, and Mermaid for easy viewing and editing.
 
-## 系统架构图
+## System Architecture Diagram
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
@@ -98,32 +98,32 @@
 └──────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## 组件说明
+## Component Descriptions
 
-### 1. 网络层 (VPC)
+### 1. Network Layer (VPC)
 
-| 组件 | 说明 |
-|------|------|
-| VPC | 10.0.0.0/16 CIDR，2个可用区 |
-| Public Subnets | 用于部署 Application Load Balancer |
-| Private Subnets | 用于部署 ECS Fargate 任务 |
-| NAT Gateway | 允许私有子网中的任务访问互联网 |
+| Component | Description |
+|-----------|-------------|
+| VPC | 10.0.0.0/16 CIDR, 2 Availability Zones |
+| Public Subnets | Used to deploy Application Load Balancer |
+| Private Subnets | Used to deploy ECS Fargate tasks |
+| NAT Gateway | Allows tasks in private subnets to access the internet |
 
-### 2. 计算层 (ECS)
+### 2. Compute Layer (ECS)
 
-#### Fargate Spot 服务 (Primary)
-- **服务名称**: sample-app
-- **容量提供者**: FARGATE_SPOT
-- **初始副本数**: 2
-- **成本**: 比标准 Fargate 节省约 70%
+#### Fargate Spot Service (Primary)
+- **Service Name**: sample-app
+- **Capacity Provider**: FARGATE_SPOT
+- **Initial Replica Count**: 2
+- **Cost**: Saves approximately 70% compared to standard Fargate
 
-#### Fargate Standard 服务 (Backup)
-- **服务名称**: sample-app-standard
-- **容量提供者**: FARGATE
-- **初始副本数**: 0 (故障转移时自动启动)
-- **用途**: 高可靠性备份
+#### Fargate Standard Service (Backup)
+- **Service Name**: sample-app-standard
+- **Capacity Provider**: FARGATE
+- **Initial Replica Count**: 0 (automatically starts during failover)
+- **Purpose**: High-availability backup
 
-### 3. 负载均衡层 (ALB)
+### 3. Load Balancer Layer (ALB)
 
 ```
 User Request -> ALB -> Target Group (Spot) -> Fargate Spot Tasks
@@ -133,64 +133,64 @@ User Request -> ALB -> Target Group (Spot) -> Fargate Spot Tasks
                      Target Group (Standard) -> Fargate Standard Tasks
 ```
 
-### 4. 控制层 (Lambda + EventBridge)
+### 4. Control Layer (Lambda + EventBridge)
 
 #### Spot Error Detector
-- **触发器**: EventBridge (ECS Task STOPPED)
-- **职责**:
-  - 分析任务停止原因
-  - 识别 Spot 相关错误
-  - 维护 DynamoDB 错误计数器
-  - 触发故障转移
+- **Trigger**: EventBridge (ECS Task STOPPED)
+- **Responsibilities**:
+  - Analyze task stop reason
+  - Identify Spot-related errors
+  - Maintain DynamoDB error counter
+  - Trigger failover
 
 #### Fargate Failback Orchestrator
-- **触发方式**: Lambda Invoke (异步)
-- **职责**:
-  - 启动标准 Fargate 服务
-  - 等待服务稳定
-  - 停止 Spot 服务
-  - 发送通知
+- **Trigger Method**: Lambda Invoke (asynchronous)
+- **Responsibilities**:
+  - Start standard Fargate service
+  - Wait for service to stabilize
+  - Stop Spot service
+  - Send notification
 
 #### Spot Success Monitor
-- **触发器**: EventBridge (ECS Task RUNNING)
-- **职责**:
-  - 检测 Spot 任务成功启动
-  - 检查故障转移状态
-  - 触发恢复流程
+- **Trigger**: EventBridge (ECS Task RUNNING)
+- **Responsibilities**:
+  - Detect Spot task successful start
+  - Check failover state
+  - Trigger recovery process
 
 #### Cleanup Orchestrator
-- **触发方式**: Lambda Invoke (异步)
-- **职责**:
-  - 恢复 Spot 服务
-  - 等待 Spot 稳定
-  - 停止标准服务
-  - 发送恢复通知
+- **Trigger Method**: Lambda Invoke (asynchronous)
+- **Responsibilities**:
+  - Restore Spot service
+  - Wait for Spot to stabilize
+  - Stop standard service
+  - Send recovery notification
 
-### 5. 数据层 (DynamoDB)
+### 5. Data Layer (DynamoDB)
 
-**表名**: fargate-spot-error-counter
+**Table Name**: fargate-spot-error-counter
 
-| 字段名 | 类型 | 说明 |
-|--------|------|------|
-| service_name | String | 服务名称 (Partition Key) |
-| error_count | Number | 连续错误计数 |
-| failover_state | Map | 故障转移状态 |
-| last_error_time | String | 最后错误时间 |
-| last_success_time | String | 最后成功时间 |
-| cleanup_in_progress | Boolean | 清理是否进行中 |
+| Field Name | Type | Description |
+|------------|------|-------------|
+| service_name | String | Service Name (Partition Key) |
+| error_count | Number | Consecutive Error Count |
+| failover_state | Map | Failover State |
+| last_error_time | String | Last Error Time |
+| last_success_time | String | Last Success Time |
+| cleanup_in_progress | Boolean | Cleanup In Progress |
 
-### 6. 通知层 (SNS)
+### 6. Notification Layer (SNS)
 
-**通知事件**:
-- Spot 错误检测
-- 故障转移触发
-- 故障转移完成
-- 恢复流程完成
-- 系统错误
+**Notification Events**:
+- Spot Error Detection
+- Failover Triggered
+- Failover Completed
+- Recovery Process Completed
+- System Error
 
-## 数据流
+## Data Flow
 
-### 故障转移数据流
+### Failover Data Flow
 
 ```
 1. Spot Task Failed
@@ -226,7 +226,7 @@ User Request -> ALB -> Target Group (Spot) -> Fargate Spot Tasks
 12. Send SNS Notification
 ```
 
-### 恢复数据流
+### Recovery Data Flow
 
 ```
 1. Spot Task Started Successfully
@@ -260,40 +260,40 @@ User Request -> ALB -> Target Group (Spot) -> Fargate Spot Tasks
 11. Send SNS Notification
 ```
 
-## 安全设计
+## Security Design
 
-### IAM 权限最小化
+### IAM Least Privilege
 
-每个 Lambda 函数只拥有必要的最小权限:
+Each Lambda function has only the minimum necessary permissions:
 
-- **ECS Access**: 仅允许 UpdateService, DescribeServices
-- **DynamoDB Access**: 仅允许特定表的 Get/Put/Update
-- **SNS Access**: 仅允许特定 Topic 的 Publish
-- **Lambda Invoke**: 仅允许特定函数的 Invoke
+- **ECS Access**: Only allow UpdateService, DescribeServices
+- **DynamoDB Access**: Only allow Get/Put/Update for specific table
+- **SNS Access**: Only allow Publish for specific Topic
+- **Lambda Invoke**: Only allow Invoke for specific functions
 
-### 网络安全
+### Network Security
 
-- ECS 任务部署在私有子网，无公网 IP
-- 仅 ALB 暴露在互联网
-- 安全组仅开放必要端口
+- ECS tasks deployed in private subnets with no public IP
+- Only ALB exposed to the internet
+- Security groups only open necessary ports
 
-### 数据安全
+### Data Security
 
-- DynamoDB 表启用加密
-- 日志保留策略（默认 7 天）
-- 无敏感数据持久化
+- DynamoDB tables enable encryption
+- Log retention policy (default 7 days)
+- No sensitive data persistence
 
-## 扩展性设计
+## Scalability Design
 
-### 水平扩展
+### Horizontal Scaling
 
-- 支持增加 Spot 和 Standard 服务的副本数
-- ALB 自动处理流量分发
-- DynamoDB on-demand 模式自动扩展
+- Support increasing replica count for Spot and Standard services
+- ALB automatically handles traffic distribution
+- DynamoDB on-demand mode auto-scales
 
-### 多服务支持
+### Multi-Service Support
 
-通过修改服务名称，可以支持多个应用：
+Multiple applications can be supported by modifying service names:
 
 ```typescript
 const services = ['api-service', 'web-service', 'worker-service'];
@@ -304,7 +304,7 @@ for (const serviceName of services) {
 }
 ```
 
-### 自定义配置
+### Custom Configuration
 
 ```typescript
 new EcsFargateSpotFailoverStack(app, 'Stack', {
@@ -314,31 +314,31 @@ new EcsFargateSpotFailoverStack(app, 'Stack', {
 });
 ```
 
-## 性能考虑
+## Performance Considerations
 
-### 故障转移时间
+### Failover Time
 
-| 阶段 | 预计时间 |
-|------|---------|
-| 错误检测 | < 1 秒 |
-| Lambda 执行 | 2-5 秒 |
-| 标准服务启动 | 30-60 秒 |
-| Spot 服务停止 | 10-30 秒 |
-| **总计** | **45-95 秒** |
+| Phase | Estimated Time |
+|-------|----------------|
+| Error Detection | < 1 second |
+| Lambda Execution | 2-5 seconds |
+| Standard Service Startup | 30-60 seconds |
+| Spot Service Stop | 10-30 seconds |
+| **Total** | **45-95 seconds** |
 
-### 恢复时间
+### Recovery Time
 
-| 阶段 | 预计时间 |
-|------|---------|
-| 成功检测 | < 1 秒 |
-| Lambda 执行 | 2-5 秒 |
-| Spot 服务启动 | 30-60 秒 |
-| 标准服务停止 | 10-30 秒 |
-| **总计** | **45-95 秒** |
+| Phase | Estimated Time |
+|-------|----------------|
+| Success Detection | < 1 second |
+| Lambda Execution | 2-5 seconds |
+| Spot Service Startup | 30-60 seconds |
+| Standard Service Stop | 10-30 seconds |
+| **Total** | **45-95 seconds** |
 
-### 优化建议
+### Optimization Suggestions
 
-1. **健康检查配置**: 调整 healthCheckGracePeriod 匹配应用启动时间
-2. **副本数**: 根据负载调整 desiredCount
-3. **阈值调整**: 根据业务容忍度调整 FAILURE_THRESHOLD
-4. **清理延迟**: 根据 Spot 稳定性调整 CLEANUP_DELAY
+1. **Health Check Configuration**: Adjust healthCheckGracePeriod to match application startup time
+2. **Replica Count**: Adjust desiredCount based on load
+3. **Threshold Adjustment**: Adjust FAILURE_THRESHOLD based on business tolerance
+4. **Cleanup Delay**: Adjust CLEANUP_DELAY based on Spot stability
