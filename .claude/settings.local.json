@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -r \"X-Ray\\\\|xray\\\\|tracing\" /d/workspace/ecs-spot-failover-example/src/ --include=*.ts)",
+      "Bash(grep -r \"TTL\\\\|TimeToLive\" /d/workspace/ecs-spot-failover-example/src/ --include=*.ts)",
+      "Bash(find /d/workspace/ecs-spot-failover-example -name *.png -o -name *.svg -o -name *.jpg)"
+    ]
+  }
+}

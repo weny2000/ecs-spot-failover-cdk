@@ -1,0 +1,23 @@
+{
+  "@aws-cdk/core:enableStackNameDuplicates": true,
+  "@aws-cdk/core:target-partitions": ["aws", "aws-cn"],
+  "multiRegion": {
+    "enabled": false,
+    "regions": ["us-east-1", "us-west-2"],
+    "enableGlobalTables": false
+  },
+  "environments": {
+    "dev": {
+      "account": "123456789012",
+      "regions": ["us-east-1"]
+    },
+    "staging": {
+      "account": "234567890123",
+      "regions": ["us-east-1", "us-west-2"]
+    },
+    "prod": {
+      "account": "345678901234",
+      "regions": ["us-east-1", "us-west-2", "eu-west-1"]
+    }
+  }
+}

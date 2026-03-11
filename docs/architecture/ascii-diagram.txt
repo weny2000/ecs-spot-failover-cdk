@@ -1,0 +1,180 @@
+================================================================================
+                    ECS Fargate Spot Failover Architecture
+================================================================================
+
+                               +-------------+
+                               |   👤 User   |
+                               +------+------+
+                                      |
+                                      v
++--------------------------------------------------------------------------------+
+|                              AWS Cloud                                         |
+|                                                                                |
+|  +------------------+      +------------------+      +------------------+     |
+|  |   🌐 Route 53    |      |  📄 CloudFront   |      |    🔒 AWS WAF    |     |
+|  +--------+---------+      +--------+---------+      +--------+---------+     |
+|           |                         |                         |               |
+|           +-------------------------+-------------------------+               |
+|                                     |                                         |
+|                                     v                                         |
+|  +----------------------------------------------------------------------------+|
+|  |                            🏠 VPC (10.0.0.0/16)                             ||
+|  |                                                                             ||
+|  |  +----------------------------------------------------------+              ||
+|  |  | 🌐 Public Subnets (10.0.1.0/24, 10.0.2.0/24)             |              ||
+|  |  |  +-------------------+        +-------------------+       |              ||
+|  |  |  | ⚖️ ALB           |        | 🔌 NAT Gateway    |       |              ||
+|  |  |  | Port: 80          |        |                   |       |              ||
+|  |  |  +--------+----------+        +---------+---------+       |              ||
+|  |  |           |                             |                |              ||
+|  |  +-----------+-----------------------------+----------------+              ||
+|  |              |                                                             ||
+|  |  +-----------v---------------------------------------------+              ||
+|  |  | 🔒 Private Subnets (10.0.3.0/24, 10.0.4.0/24)            |              ||
+|  |  |                                                          |              ||
+|  |  |  +----------------------------------------------------+  |              ||
+|  |  |  | 📦 ECS Cluster: fargate-spot-cluster                |  |              ||
+|  |  |  |                                                     |  |              ||
+|  |  |  |  +------------------------------------------+       |  |              ||
+|  |  |  |  | 🟢 Fargate Spot Service: sample-app      |       |  |              ||
+|  |  |  |  | Capacity Provider: FARGATE_SPOT          |       |  |              ||
+|  |  |  |  | Desired Count: 2                         |       |  |              ||
+|  |  |  |  |                                          |       |  |              ||
+|  |  |  |  |  +-----------+     +-----------+        |       |  |              ||
+|  |  |  |  |  | 📋 Task 1 |     | 📋 Task 2 |        |       |  |              ||
+|  |  |  |  |  | Nginx     |     | Nginx     |        |       |  |              ||
+|  |  |  |  |  | CPU: 256  |     | CPU: 256  |        |       |  |              ||
+|  |  |  |  |  +-----------+     +-----------+        |       |  |              ||
+|  |  |  |  +------------------------------------------+       |  |              ||
+|  |  |  |                                                     |  |              ||
+|  |  |  |  +------------------------------------------+       |  |              ||
+|  |  |  |  | 🟡 Fargate Standard: sample-app-standard |       |  |              ||
+|  |  |  |  | Capacity Provider: FARGATE               |       |  |              ||
+|  |  |  |  | Desired Count: 0 → 2 (on failover)       |       |  |              ||
+|  |  |  |  |                                          |       |  |              ||
+|  |  |  |  |  +-----------+                           |       |  |              ||
+|  |  |  |  |  | 📋 Standby|                           |       |  |              ||
+|  |  |  |  |  | Nginx     |                           |       |  |              ||
+|  |  |  |  |  +-----------+                           |       |  |              ||
+|  |  |  |  +------------------------------------------+       |  |              ||
+|  |  |  |                                                     |  |              ||
+|  |  |  +----------------------------------------------------+  |              ||
+|  |  |                                                          |              ||
+|  |  +----------------------------------------------------------+              ||
+|  |                                                                             ||
+|  +----------------------------------------------------------------------------+|
+|                                                                                |
+|  +--------------------------------------------------------------------------+  |
+|  |                        ⚡ Serverless Components                           |  |
+|  |                                                                           |  |
+|  |   +-------------+    +------------------+    +------------------------+   |  |
+|  |   | 📡          |    | 🔍 Spot Error    |    | 🔄 Failback            |   |  |
+|  |   | EventBridge +--->+ Detector         +--->+ Orchestrator           |   |  |
+|  |   |             |    |                  |    |                        |   |  |
+|  |   | STOPPED     |    | • Detect errors  |    | • Start Standard       |   |  |
+|  |   | RUNNING     |    | • Update count   |    | • Stop Spot            |   |  |
+|  |   +-------------+    +--------+---------+    +-----------+------------+   |  |
+|  |                               |                          |                |  |
+|  |                               v                          v                |  |
+|  |   +-------------+    +------------------+    +------------------------+   |  |
+|  |   | 💾          |    | ✅ Spot Success  |    | 🧹 Cleanup             |   |  |
+|  |   | DynamoDB    |<---+ Monitor          +--->+ Orchestrator           |   |  |
+|  |   |             |    |                  |    |                        |   |  |
+|  |   | error_count |    | • Detect success |    | • Restore Spot         |   |  |
+|  |   | failover_   |    | • Reset count    |    | • Stop Standard        |   |  |
+|  |   | state       |    +--------+---------+    +------------------------+   |  |
+|  |   +-------------+             |                                          |  |
+|  |                               v                                          |  |
+|  |   +-------------+    +------------------+                                |  |
+|  |   | 📨 SNS      |    | 📊 CloudWatch    |                                |  |
+|  |   | Notifications+   | Logs             |                                |  |
+|  |   +-------------+    +------------------+                                |  |
+|  |                                                                           |  |
+|  +--------------------------------------------------------------------------+  |
+|                                                                                |
++--------------------------------------------------------------------------------+
+
+================================================================================
+                              Data Flow Diagram
+================================================================================
+
+NORMAL OPERATION:
+-----------------
+User → ALB → Spot Target Group → Fargate Spot Service (2 tasks)
+                              ↓
+                    Spot Success Monitor
+                              ↓
+                    Reset error count (DynamoDB)
+
+FAILOVER FLOW:
+--------------
+1. Spot Task Failed (STOPPED event)
+2. EventBridge → Spot Error Detector Lambda
+3. Error count incremented in DynamoDB
+4. Threshold reached (≥3 errors)
+5. Spot Error Detector → Failback Orchestrator Lambda (async)
+6. Failback Orchestrator:
+   - Start Standard Fargate Service (0→2 tasks)
+   - Wait for stable
+   - Stop Spot Service (2→0 tasks)
+   - Update failover_state in DynamoDB
+   - Send SNS notification
+7. ALB automatically routes to Standard Target Group
+
+RECOVERY FLOW:
+--------------
+1. Spot Task Started (RUNNING event)
+2. EventBridge → Spot Success Monitor Lambda
+3. Reset error count in DynamoDB
+4. Check failover_state (active)
+5. Spot Success Monitor → Cleanup Orchestrator Lambda (async)
+6. Cleanup Orchestrator:
+   - Wait CLEANUP_DELAY (30s)
+   - Start Spot Service (0→2 tasks)
+   - Wait for stable
+   - Stop Standard Service (2→0 tasks)
+   - Clear failover_state in DynamoDB
+   - Send SNS notification
+7. ALB automatically routes back to Spot Target Group
+
+================================================================================
+                              Network Flow
+================================================================================
+
+Inbound:
+  User → Internet → ALB (Public Subnet) → Target Group → ECS Tasks (Private)
+
+Outbound:
+  ECS Tasks (Private) → NAT Gateway (Public) → Internet
+
+Note: ECS Tasks have no public IP, all outbound traffic goes through NAT
+
+================================================================================
+                           IAM Permissions Flow
+================================================================================
+
+Lambda Execution Role:
+  ├── ECS Access: UpdateService, DescribeServices
+  ├── DynamoDB Access: GetItem, PutItem, UpdateItem (specific table only)
+  ├── SNS Access: Publish (specific topic only)
+  └── Lambda Invoke: InvokeFunction (specific functions only)
+
+ECS Task Role:
+  ├── CloudWatch Logs: CreateLogStream, PutLogEvents
+  └── (Minimal permissions based on application needs)
+
+================================================================================
+                              Legend
+================================================================================
+
+🟢 Green  = Fargate Spot (Cost Optimized, ~70% savings)
+🟡 Yellow = Fargate Standard (High Availability, On-Demand pricing)
+🔵 Blue   = Network Components
+🟣 Purple = Compute/Container
+🔴 Red    = Serverless/Managed Services
+
+Solid lines (→)   = Primary traffic/control flow
+Dashed lines (- - >) = Failover/recovery flow
+Double lines (⇒)  = High frequency interactions
+
+================================================================================

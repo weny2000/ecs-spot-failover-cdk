@@ -1,15 +1,30 @@
 {
   "name": "ecs-fargate-spot-failover",
   "version": "1.0.0",
-  "description": "ECS Fargate Spot instance automatic failover solution",
+  "description": "ECS Fargate Spot instance automatic failover solution with one-click deployment",
   "main": "lib/index.js",
   "scripts": {
     "build": "tsc",
     "watch": "tsc -w",
     "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:unit": "jest test/unit",
+    "test:integration": "jest test/integration --testTimeout=60000",
     "cdk": "cdk",
     "deploy": "npm run build && cdk deploy",
-    "destroy": "cdk destroy"
+    "deploy:minimal": "npm run build && cdk deploy -c createSampleApp=false",
+    "deploy:multi": "npm run build && node scripts/deploy-multi-region.js",
+    "destroy": "cdk destroy",
+    "synth": "npm run build && cdk synth",
+    "diff": "npm run build && cdk diff",
+    "lint": "eslint . --ext .ts",
+    "lint:fix": "eslint . --ext .ts --fix",
+    "lint:security": "eslint . --ext .ts --rule 'no-eval: error' --rule 'no-implied-eval: error'",
+    "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\" \"scripts/**/*.js\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\" \"scripts/**/*.js\"",
+    "clean": "rm -rf dist cdk.out coverage",
+    "predeploy": "npm run build"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.119",
@@ -20,8 +35,38 @@
     "typescript": "^5.2.2"
   },
   "dependencies": {
+    "@aws-sdk/client-cloudwatch": "^3.450.0",
+    "@aws-sdk/client-dynamodb": "^3.450.0",
+    "@aws-sdk/client-ecs": "^3.450.0",
+    "@aws-sdk/client-lambda": "^3.450.0",
+    "@aws-sdk/client-sns": "^3.450.0",
+    "@aws-sdk/client-sfn": "^3.450.0",
+    "@aws-sdk/client-x-ray": "^3.450.0",
+    "@aws-sdk/lib-dynamodb": "^3.450.0",
     "aws-cdk-lib": "^2.100.0",
-    "aws-sdk": "^2.1467.0",
-    "constructs": "^10.3.0"
-  }
+    "aws-xray-sdk-core": "^3.5.3",
+    "constructs": "^10.3.0",
+    "source-map-support": "^0.5.21"
+  },
+  "keywords": [
+    "aws",
+    "cdk",
+    "ecs",
+    "fargate",
+    "spot",
+    "failover",
+    "serverless",
+    "cost-optimization",
+    "high-availability"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/ecs-fargate-spot-failover.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/ecs-fargate-spot-failover/issues"
+  },
+  "homepage": "https://github.com/yourusername/ecs-fargate-spot-failover#readme"
 }

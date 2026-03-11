@@ -1,0 +1,242 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [main, develop, feature/*]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  NODE_VERSION: '18.x'
+  CDK_DEFAULT_REGION: 'us-east-1'
+
+jobs:
+  # Lint and format checks
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run ESLint
+        run: npm run lint
+      
+      - name: Check Prettier formatting
+        run: npm run format:check
+      
+      - name: Check TypeScript compilation
+        run: npm run build
+
+  # Security scanning
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run npm audit
+        run: |
+          npm audit --audit-level=moderate || true
+      
+      - name: Run ESLint security plugin
+        run: npm run lint:security
+      
+      - name: Check for secrets with GitLeaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+      
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+      
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  # Type checking
+  typecheck:
+    name: Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run TypeScript strict check
+        run: npx tsc --noEmit --strict
+      
+      - name: Check for type coverage
+        run: |
+          echo "TypeScript compilation successful"
+          echo "Files checked: $(find src -name '*.ts' | wc -l)"
+
+  # CDK synthesis check
+  cdk-synth:
+    name: CDK Synthesis
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build TypeScript
+        run: npm run build
+      
+      - name: Synthesize CDK templates
+        run: |
+          npx cdk synth --quiet
+          echo "CDK synthesis successful"
+      
+      - name: Validate CloudFormation templates
+        run: |
+          for template in cdk.out/*.template.json; do
+            echo "Validating $template"
+            aws cloudformation validate-template \
+              --template-body file://"$template" \
+              --region ${{ env.CDK_DEFAULT_REGION }} || true
+          done
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ env.CDK_DEFAULT_REGION }}
+
+  # Documentation check
+  docs:
+    name: Documentation Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Check for documentation updates
+        run: |
+          # Check if README was updated when src changed
+          if git diff --name-only HEAD~1 HEAD | grep -q '^src/' && \
+             ! git diff --name-only HEAD~1 HEAD | grep -q 'README'; then
+            echo "⚠️ Warning: Source files changed but README was not updated"
+          fi
+      
+      - name: Validate Markdown links
+        uses: lycheeverse/lychee-action@v1
+        with:
+          args: --max-retries 3 --timeout 30 README.md docs/
+          fail: false
+      
+      - name: Check Markdown formatting
+        run: |
+          npm install -g markdownlint-cli
+          markdownlint '**/*.md' || true
+
+  # Dependency analysis
+  dependencies:
+    name: Dependency Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      
+      - name: Check for outdated dependencies
+        run: |
+          npm outdated || true
+      
+      - name: Check for duplicate dependencies
+        run: |
+          npm ls --depth=0 2>&1 | grep -i "dedupe" || true
+      
+      - name: Analyze bundle size
+        run: |
+          npm install -g bundlesize
+          echo "Bundle size analysis would run here"
+
+  # Performance checks
+  performance:
+    name: Performance Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Check Lambda package sizes
+        run: |
+          echo "Lambda package sizes:"
+          for dir in src/lambda/*; do
+            if [ -d "$dir" ]; then
+              size=$(find "$dir" -name '*.ts' -exec wc -l {} + 2>/dev/null | tail -1 | awk '{print $1}')
+              echo "  $(basename $dir): ${size:-0} lines"
+            fi
+          done
+      
+      - name: Check for large files
+        run: |
+          find . -type f -size +1M -not -path './node_modules/*' -not -path './.git/*' | head -20
+
+  # Summary
+  quality-summary:
+    name: Quality Summary
+    runs-on: ubuntu-latest
+    needs: [lint, security, typecheck, cdk-synth, docs, dependencies, performance]
+    if: always()
+    steps:
+      - name: Generate summary
+        run: |
+          echo "## Code Quality Check Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Lint & Format | ${{ needs.lint.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security Scan | ${{ needs.security.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Type Check | ${{ needs.typecheck.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| CDK Synthesis | ${{ needs.cdk-synth.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Documentation | ${{ needs.docs.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dependencies | ${{ needs.dependencies.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Performance | ${{ needs.performance.result }} |" >> $GITHUB_STEP_SUMMARY

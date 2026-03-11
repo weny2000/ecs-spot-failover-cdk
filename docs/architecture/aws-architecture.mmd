@@ -1,0 +1,116 @@
+graph TB
+    subgraph AWS["☁️ AWS Cloud"]
+        direction TB
+        
+        subgraph VPC["🏠 VPC (10.0.0.0/16)"]
+            direction TB
+            
+            subgraph PublicSubnet["🌐 Public Subnets"]
+                ALB["⚖️ Application Load Balancer<br/>Port: 80<br/>Internet-facing"]
+                NAT["🔌 NAT Gateway"]
+            end
+            
+            subgraph PrivateSubnet["🔒 Private Subnets"]
+                direction TB
+                
+                subgraph ECSCluster["📦 ECS Cluster: fargate-spot-cluster"]
+                    direction TB
+                    
+                    subgraph SpotService["🟢 Fargate Spot Service: sample-app<br/>Capacity: FARGATE_SPOT | Desired: 2"]
+                        Spot1["📋 Task 1<br/>Nginx Container<br/>CPU: 256 | Memory: 512"]
+                        Spot2["📋 Task 2<br/>Nginx Container<br/>CPU: 256 | Memory: 512"]
+                    end
+                    
+                    subgraph StandardService["🟡 Fargate Standard: sample-app-standard<br/>Capacity: FARGATE | Desired: 0→2"]
+                        Standard1["📋 Standby Task<br/>Nginx Container<br/>CPU: 256 | Memory: 512"]
+                    end
+                    
+                    subgraph TargetGroups["🎯 Target Groups"]
+                        SpotTG["Spot TG"]
+                        StandardTG["Standard TG"]
+                    end
+                end
+            end
+        end
+        
+        subgraph Serverless["⚡ Serverless Components"]
+            direction TB
+            
+            EventBridge["📡 EventBridge<br/>ECS Task State Change Events"]
+            
+            subgraph LambdaFunctions["🚀 Lambda Functions"]
+                SpotError["🔍 Spot Error Detector<br/>• Detect Spot errors<br/>• Update error count<br/>• Trigger failover"]
+                SpotSuccess["✅ Spot Success Monitor<br/>• Detect success events<br/>• Reset error count<br/>• Trigger cleanup"]
+                Failback["🔄 Failback Orchestrator<br/>• Start standard service<br/>• Stop Spot service<br/>• Update DynamoDB"]
+                Cleanup["🧹 Cleanup Orchestrator<br/>• Restore Spot service<br/>• Stop standard service<br/>• Update DynamoDB"]
+            end
+            
+            DynamoDB["💾 DynamoDB<br/>fargate-spot-error-counter<br/>• error_count<br/>• failover_state<br/>• cleanup_state"]
+            SNS["📨 SNS<br/>Notifications<br/>• Email<br/>• Slack<br/>• SMS"]
+            CloudWatch["📊 CloudWatch Logs<br/>/aws/lambda/*<br/>/ecs/*"]
+        end
+    end
+
+    ' Traffic flow
+    Users["👥 Users"] --> ALB
+    ALB -->|Primary| SpotTG
+    ALB -.->|Failover| StandardTG
+    SpotTG --> SpotService
+    StandardTG -.-> StandardService
+
+    ' Event flow
+    SpotService -->|STOPPED| EventBridge
+    StandardService -->|STOPPED| EventBridge
+    SpotService -->|RUNNING| EventBridge
+    
+    EventBridge -->|STOPPED events| SpotError
+    EventBridge -->|RUNNING events| SpotSuccess
+    
+    ' Lambda invocations
+    SpotError -.->|Threshold reached| Failback
+    SpotSuccess -.->|Recovering| Cleanup
+    
+    ' ECS control
+    Failback -->|Start| StandardService
+    Failback -.->|Stop| SpotService
+    Cleanup -->|Start| SpotService
+    Cleanup -.->|Stop| StandardService
+    
+    ' Data flow
+    SpotError -->|Update| DynamoDB
+    SpotSuccess -->|Reset| DynamoDB
+    Failback -->|Update state| DynamoDB
+    Cleanup -->|Clear state| DynamoDB
+    
+    ' Notifications
+    SpotError --> SNS
+    SpotSuccess --> SNS
+    Failback --> SNS
+    Cleanup --> SNS
+    
+    ' Logging
+    SpotError -.-> CloudWatch
+    SpotSuccess -.-> CloudWatch
+    Failback -.-> CloudWatch
+    Cleanup -.-> CloudWatch
+
+    ' Network
+    NAT -.-> Spot1
+    NAT -.-> Spot2
+    NAT -.-> Standard1
+
+    classDef spot fill:#d4edda,stroke:#28a745,stroke-width:2px
+    classDef standard fill:#fff3cd,stroke:#ffc107,stroke-width:2px
+    classDef network fill:#e8f4fd,stroke:#007bff,stroke-width:1px
+    classDef public fill:#fff8dc,stroke:#ff9800,stroke-width:1px
+    classDef private fill:#f0e6f5,stroke:#9c27b0,stroke-width:1px
+    classDef serverless fill:#ffe6e6,stroke:#dc3545,stroke-width:1px
+    classDef external fill:#f8f9fa,stroke:#6c757d,stroke-width:1px
+
+    class Spot1,Spot2,SpotService,SpotTG spot
+    class Standard1,StandardService,StandardTG standard
+    class VPC network
+    class PublicSubnet,ALB,NAT public
+    class PrivateSubnet,ECSCluster private
+    class EventBridge,SpotError,SpotSuccess,Failback,Cleanup,DynamoDB,SNS,CloudWatch,Serverless,LambdaFunctions serverless
+    class Users external

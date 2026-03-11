@@ -1,71 +1,44 @@
-# 🚀 ECS Fargate Spot 自动故障转移解决方案
+# 🚀 ECS Fargate Spot Automatic Failover Solution
 
-[English](README_EN.md) | 简体中文
+English | [简体中文](README.md)
 
-一个完全自动化的无服务器架构解决方案，用于监控 ECS Fargate Spot 实例的健康状态，并在连续故障时自动切换到标准 Fargate 实例。
+A fully automated serverless architecture solution for monitoring ECS Fargate Spot instance health and automatically switching to standard Fargate instances during consecutive failures.
 
-[![CI](https://github.com/yourusername/ecs-fargate-spot-failover/actions/workflows/ci.yml/badge.svg)](https://github.com/yourusername/ecs-fargate-spot-failover/actions/workflows/ci.yml)
-[![CD - Dev](https://github.com/yourusername/ecs-fargate-spot-failover/actions/workflows/cd-dev.yml/badge.svg)](https://github.com/yourusername/ecs-fargate-spot-failover/actions/workflows/cd-dev.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![AWS CDK](https://img.shields.io/badge/AWS-CDK-orange.svg)](https://aws.amazon.com/cdk/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-4.9+-blue.svg)](https://www.typescriptlang.org/)
 
-## 📋 目录
+## 📋 Table of Contents
 
-- [项目概述](#-项目概述)
-- [架构设计](#-架构设计)
-- [核心特性](#-核心特性)
-- [快速开始](#-快速开始)
-- [部署选项](#-部署选项)
-- [工作原理](#-工作原理)
-- [监控与告警](#-监控与告警)
-- [成本分析](#-成本分析)
-- [故障排除](#-故障排除)
-- [CI/CD 流水线](#-cicd-流水线)
-- [清理资源](#-清理资源)
-- [贡献指南](#-贡献指南)
+- [Overview](#-overview)
+- [Architecture](#-architecture)
+- [Features](#-features)
+- [Quick Start](#-quick-start)
+- [Deployment Options](#-deployment-options)
+- [How It Works](#-how-it-works)
+- [Monitoring & Alerts](#-monitoring--alerts)
+- [Cost Analysis](#-cost-analysis)
+- [Troubleshooting](#-troubleshooting)
+- [Cleanup](#-cleanup)
+- [Contributing](#-contributing)
 
-## 🎯 项目概述
+## 🎯 Overview
 
-当 AWS 区域出现故障、Spot 资源池耗尽或其他原因导致 Fargate Spot 实例连续启动失败时，系统会自动将工作负载切换到更可靠的标准 Fargate 实例，确保服务的高可用性。
+When AWS regions experience failures, Spot resource pools are exhausted, or other reasons cause consecutive Fargate Spot instance startup failures, the system automatically switches workloads to more reliable standard Fargate instances, ensuring high availability of services.
 
-### 适用场景
+### Use Cases
 
-- 成本敏感的生产环境
-- 可容忍短暂中断的工作负载
-- 批处理任务和后台作业
-- 开发和测试环境
-- 需要自动恢复能力的无状态应用
+- Cost-sensitive production environments
+- Workloads tolerant of brief interruptions
+- Batch processing and background jobs
+- Development and testing environments
+- Stateless applications requiring auto-recovery
 
-## 🏗️ 架构设计
-
-### 架构图
-
-我们提供了多种格式的架构图，可在 Draw.io、PlantUML、Mermaid 中查看和编辑：
-
-📁 **[查看架构图文件](./docs/architecture/)**
-
-| 格式 | 文件 | 使用场景 |
-|------|------|----------|
-| **Draw.io** | [`aws-architecture.drawio`](./docs/architecture/aws-architecture.drawio) | 可交互编辑，推荐用于技术评审 |
-| **PlantUML** | [`aws-architecture.puml`](./docs/architecture/aws-architecture.puml) | 代码化架构，版本控制友好 |
-| **Mermaid** | [`aws-architecture.mmd`](./docs/architecture/aws-architecture.mmd) | Markdown 内嵌，GitHub/GitLab 原生支持 |
-
-**快速预览:**
-
-```bash
-# 使用 VS Code + Draw.io 扩展
-open docs/architecture/aws-architecture.drawio
-
-# 或使用 PlantUML 在线工具
-# https://www.plantuml.com/plantuml/uml/
-```
-
-### 架构概览
+## 🏗️ Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                              用户请求                                         │
+│                              User Requests                                    │
 │                                 │                                           │
 │                                 ▼                                           │
 │                    ┌──────────────────────┐                                │
@@ -77,11 +50,11 @@ open docs/architecture/aws-architecture.drawio
 │           │                                       │                        │
 │           ▼                                       ▼                        │
 │  ┌─────────────────┐                    ┌─────────────────┐                │
-│  │  Fargate Spot   │    故障转移时       │  Fargate        │                │
+│  │  Fargate Spot   │    On Failure      │  Fargate        │                │
 │  │  (sample-app)   │◄──────────────────►│  (sample-app-   │                │
-│  │  • 成本优化      │    自动切换         │   standard)     │                │
-│  │  • 副本: 2      │                    │  • 高可靠性      │                │
-│  └─────────────────┘                    │  • 初始: 0      │                │
+│  │  • Cost Opt     │    Auto Switch     │   standard)     │                │
+│  │  • Replicas: 2  │                    │  • High Rel     │                │
+│  └─────────────────┘                    │  • Initial: 0   │                │
 │           │                              └─────────────────┘                │
 │           │                                                                 │
 │           │  Task State Change Events                                       │
@@ -89,8 +62,8 @@ open docs/architecture/aws-architecture.drawio
 │  ┌─────────────────────────────────────────────────────────────┐           │
 │  │                    EventBridge                               │           │
 │  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │           │
-│  │  │ STOPPED     │  │ RUNNING     │  │ 事件规则             │  │           │
-│  │  │ (错误检测)   │  │ (成功检测)   │  │                     │  │           │
+│  │  │ STOPPED     │  │ RUNNING     │  │ Event Rules          │  │           │
+│  │  │ (Error)     │  │ (Success)   │  │                      │  │           │
 │  │  └──────┬──────┘  └──────┬──────┘  └─────────────────────┘  │           │
 │  └─────────┼────────────────┼──────────────────────────────────┘           │
 │            │                │                                              │
@@ -104,7 +77,7 @@ open docs/architecture/aws-architecture.drawio
 │           ▼                    ▼                                          │
 │  ┌─────────────────┐  ┌─────────────────┐                                 │
 │  │ DynamoDB        │  │ Cleanup         │                                 │
-│  │ (错误计数器)     │  │ Orchestrator    │                                 │
+│  │ (Counter)       │  │ Orchestrator    │                                 │
 │  └─────────────────┘  │ Lambda          │                                 │
 │                       └─────────────────┘                                 │
 │            │                                                              │
@@ -116,66 +89,66 @@ open docs/architecture/aws-architecture.drawio
 │  └─────────────────┘                                                      │
 │                                                                           │
 │  ┌─────────────────────────────────────────────────────────────┐         │
-│  │ SNS Topic (通知)                                             │         │
-│  │  • 邮件告警  • Slack通知  • 短信通知                           │         │
+│  │ SNS Topic (Notifications)                                    │         │
+│  │  • Email  • Slack  • SMS                                     │         │
 │  └─────────────────────────────────────────────────────────────┘         │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## ✨ 核心特性
+## ✨ Features
 
-| 特性 | 描述 |
-|------|------|
-| 🚀 **全自动化** | 无需人工干预的故障检测和切换 |
-| 💰 **成本优化** | 优先使用 Spot 实例，节省高达 70% 成本 |
-| 🔄 **智能恢复** | Spot 实例恢复后自动切回低成本模式 |
-| 📊 **实时监控** | 完整的事件日志和状态追踪 |
-| 🔔 **告警通知** | 关键事件实时通知 |
-| ⚡ **快速响应** | 基于 EventBridge 的事件驱动架构 |
-| 🏗️ **一键部署** | CDK 完整基础设施即代码 |
+| Feature | Description |
+|---------|-------------|
+| 🚀 **Fully Automated** | Fault detection and switching without manual intervention |
+| 💰 **Cost Optimized** | Prioritize Spot instances, save up to 70% on costs |
+| 🔄 **Intelligent Recovery** | Auto-switch back to cost-effective mode after Spot recovery |
+| 📊 **Real-time Monitoring** | Complete event logs and status tracking |
+| 🔔 **Alert Notifications** | Real-time notifications for critical events |
+| ⚡ **Fast Response** | Event-driven architecture based on EventBridge |
+| 🏗️ **One-Click Deploy** | Complete infrastructure as code with CDK |
 
-## 🚀 快速开始
+## 🚀 Quick Start
 
-### 前提条件
+### Prerequisites
 
-- [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html) 已配置
+- [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html) configured
 - [Node.js](https://nodejs.org/) >= 18.x
 - [AWS CDK](https://docs.aws.amazon.com/cdk/latest/guide/getting_started.html) >= 2.x
-- 具备以下 AWS 权限：
+- Required AWS permissions:
   - ECS, Lambda, DynamoDB, EventBridge, SNS, IAM, CloudWatch Logs, ELB
 
-### 1. 安装与部署
+### 1. Install & Deploy
 
 ```bash
-# 克隆项目
+# Clone the repository
 git clone https://github.com/yourusername/ecs-fargate-spot-failover.git
 cd ecs-fargate-spot-failover
 
-# 安装依赖
+# Install dependencies
 npm install
 
-# 部署完整基础设施（包含示例应用）
+# Deploy full infrastructure (including sample app)
 npm run deploy
 ```
 
-### 2. 访问示例应用
+### 2. Access Sample Application
 
-部署完成后，输出会显示负载均衡器的 DNS 地址：
+After deployment, the output will show the load balancer DNS:
 
 ```bash
-# 获取应用访问地址
+# Get application URL
 aws cloudformation describe-stacks \
   --stack-name EcsFargateSpotFailoverStack \
   --query 'Stacks[0].Outputs[?OutputKey==`LoadBalancerDNS`].OutputValue' \
   --output text
 ```
 
-在浏览器中访问：`http://<LoadBalancerDNS>`
+Access in browser: `http://<LoadBalancerDNS>`
 
-### 3. 配置告警通知（可选）
+### 3. Configure Alerts (Optional)
 
 ```bash
-# 添加邮件订阅
+# Add email subscription
 aws sns subscribe \
   --topic-arn $(aws cloudformation describe-stacks \
     --stack-name EcsFargateSpotFailoverStack \
@@ -185,218 +158,218 @@ aws sns subscribe \
   --notification-endpoint your-email@example.com
 ```
 
-## 🔧 部署选项
+## 🔧 Deployment Options
 
-### 完整部署（推荐）
+### Full Deployment (Recommended)
 
-部署完整的解决方案，包括示例应用、负载均衡器和所有监控组件：
+Deploy complete solution including sample app, load balancer, and monitoring:
 
 ```bash
-# 默认部署（2个 Spot 实例副本）
+# Default deployment (2 Spot replicas)
 npm run deploy
 
-# 自定义副本数
+# Custom replica count
 npm run deploy -- -c sampleAppDesiredCount=4
 
-# 自定义应用端口
+# Custom app port
 npm run deploy -- -c appPort=8080
 ```
 
-### 最小化部署
+### Minimal Deployment
 
-仅部署故障转移机制，不包含示例应用（适用于已有 ECS 服务的场景）：
+Deploy failover mechanism only, without sample app (for existing ECS services):
 
 ```bash
 npm run deploy:minimal
 ```
 
-### 分步部署
+### Step-by-Step Deployment
 
 ```bash
-# 1. 编译 TypeScript
+# 1. Compile TypeScript
 npm run build
 
-# 2. 查看变更
+# 2. View changes
 npm run diff
 
-# 3. 合成 CloudFormation 模板
+# 3. Synthesize CloudFormation template
 npm run synth
 
-# 4. 部署
+# 4. Deploy
 npm run deploy
 ```
 
-## 🔄 工作原理
+## 🔄 How It Works
 
-### 正常运行
+### Normal Operation
 
 ```
-用户请求 → ALB → Fargate Spot (sample-app: 2 replicas)
+User Request → ALB → Fargate Spot (sample-app: 2 replicas)
                               ↓
-                    Spot Success Monitor (监控成功事件)
+                    Spot Success Monitor (Success Events)
                               ↓
-                    重置错误计数器 → 保持健康状态
+                    Reset Error Counter → Healthy State
 ```
 
-### 故障转移流程
+### Failover Flow
 
 ```
-1. Spot 实例连续失败 (>=3次)
+1. Spot instances fail consecutively (>=3 times)
            ↓
-2. EventBridge 捕获 STOPPED 事件
+2. EventBridge captures STOPPED events
            ↓
-3. Spot Error Detector 增加错误计数
+3. Spot Error Detector increments error count
            ↓
-4. 达到阈值 → 触发 Failback Orchestrator
+4. Threshold reached → Trigger Failback Orchestrator
            ↓
-5. 启动标准 Fargate (sample-app-standard: 2 replicas)
+5. Start standard Fargate (sample-app-standard: 2 replicas)
            ↓
-6. 停止 Spot 服务 (sample-app: 0 replicas)
+6. Stop Spot service (sample-app: 0 replicas)
            ↓
-7. ALB 自动将流量切换到标准服务
+7. ALB automatically switches traffic to standard service
            ↓
-8. 发送告警通知
+8. Send alert notification
 ```
 
-### 自动恢复流程
+### Auto-Recovery Flow
 
 ```
-1. Spot 实例恢复正常
+1. Spot instances recover
            ↓
-2. Spot Success Monitor 检测 RUNNING 事件
+2. Spot Success Monitor detects RUNNING events
            ↓
-3. 触发 Cleanup Orchestrator
+3. Trigger Cleanup Orchestrator
            ↓
-4. 启动 Spot 服务 (sample-app: 2 replicas)
+4. Start Spot service (sample-app: 2 replicas)
            ↓
-5. 等待 Spot 服务稳定
+5. Wait for Spot service stabilization
            ↓
-6. 停止标准服务 (sample-app-standard: 0 replicas)
+6. Stop standard service (sample-app-standard: 0 replicas)
            ↓
-7. ALB 将流量切回 Spot 服务
+7. ALB switches traffic back to Spot service
            ↓
-8. 发送恢复通知
+8. Send recovery notification
 ```
 
-## 📊 监控与告警
+## 📊 Monitoring & Alerts
 
-### CloudWatch 日志
+### CloudWatch Logs
 
 ```bash
-# 查看 Spot 服务日志
+# View Spot service logs
 aws logs tail /ecs/fargate-spot-sample-app --follow --filter-pattern "spot-service"
 
-# 查看标准服务日志
+# View standard service logs
 aws logs tail /ecs/fargate-spot-sample-app --follow --filter-pattern "standard-service"
 
-# 查看 Lambda 函数日志
+# View Lambda function logs
 aws logs tail /aws/lambda/EcsFargateSpotFailoverStack-SpotErrorDetector --follow
 ```
 
-### DynamoDB 状态查询
+### DynamoDB Status Query
 
 ```bash
-# 查看错误计数器
+# View error counter
 aws dynamodb get-item \
   --table-name fargate-spot-error-counter \
   --key '{"service_name": {"S": "sample-app"}}'
 ```
 
-### 服务状态检查
+### Service Status Check
 
 ```bash
-# 查看 Spot 服务状态
+# Check Spot service status
 aws ecs describe-services \
   --cluster fargate-spot-cluster \
   --services sample-app
 
-# 查看标准服务状态
+# Check standard service status
 aws ecs describe-services \
   --cluster fargate-spot-cluster \
   --services sample-app-standard
 ```
 
-## 💰 成本分析
+## 💰 Cost Analysis
 
-| 资源类型 | 单价估算 | 说明 |
-|---------|---------|------|
-| Fargate Spot | $0.01232/vCPU/hour | 比标准 Fargate 节省约 70% |
-| Fargate Standard | $0.04048/vCPU/hour | 故障转移时使用 |
-| Application Load Balancer | ~$0.0225/hour | LCU 费用另计 |
-| Lambda | 免费额度内 | 事件驱动，调用次数少 |
-| DynamoDB | 免费额度内 | on-demand 计费 |
-| SNS | 免费额度内 | 告警通知 |
+| Resource Type | Price Estimate | Notes |
+|--------------|----------------|-------|
+| Fargate Spot | $0.01232/vCPU/hour | ~70% savings vs standard Fargate |
+| Fargate Standard | $0.04048/vCPU/hour | Used during failover |
+| Application Load Balancer | ~$0.0225/hour | LCU charges apply |
+| Lambda | Within free tier | Event-driven, minimal invocations |
+| DynamoDB | Within free tier | On-demand billing |
+| SNS | Within free tier | Alert notifications |
 
-**月度成本估算（2 vCPU 配置）：**
+**Monthly Cost Estimate (2 vCPU config):**
 
-- 全部使用 Spot：~$18/月
-- 全部使用标准：~$60/月
-- 混合模式（90% Spot）：~$22/月
+- All Spot: ~$18/month
+- All Standard: ~$60/month
+- Hybrid (90% Spot): ~$22/month
 
-## 🛠️ 故障排除
+## 🛠️ Troubleshooting
 
-### 常见问题
+### Common Issues
 
-#### 1. Lambda 函数权限不足
+#### 1. Lambda Permission Issues
 
 ```bash
-# 检查 IAM 角色权限
+# Check IAM role permissions
 aws iam get-role --role-name EcsFargateSpotFailoverStack-LambdaExecutionRole
 ```
 
-#### 2. EventBridge 规则未触发
+#### 2. EventBridge Rules Not Triggering
 
 ```bash
-# 检查事件规则状态
+# Check event rule status
 aws events list-rules --name-prefix EcsFargateSpotFailoverStack
 
-# 查看 CloudTrail 事件
+# View CloudTrail events
 aws cloudtrail lookup-events \
   --lookup-attributes AttributeKey=EventName,AttributeValue=PutRule
 ```
 
-#### 3. 服务创建失败
+#### 3. Service Creation Failed
 
 ```bash
-# 检查 ECS 集群状态
+# Check ECS cluster status
 aws ecs describe-clusters --clusters fargate-spot-cluster
 
-# 查看服务事件
+# View service events
 aws ecs describe-services \
   --cluster fargate-spot-cluster \
   --services sample-app \
   --query 'services[0].events[:5]'
 ```
 
-#### 4. 故障转移未触发
+#### 4. Failover Not Triggered
 
-检查 DynamoDB 中的错误计数：
+Check error counter in DynamoDB:
 
 ```bash
 aws dynamodb scan --table-name fargate-spot-error-counter
 ```
 
-### 调试日志
+### Debug Logs
 
 ```bash
-# 查看所有 Lambda 日志组
+# View all Lambda log groups
 aws logs describe-log-groups \
   --log-group-name-prefix "/aws/lambda/EcsFargateSpotFailoverStack"
 
-# 实时监控所有日志
+# Real-time monitoring of all logs
 aws logs tail "/aws/lambda/EcsFargateSpotFailoverStack-SpotErrorDetector" --follow &
 aws logs tail "/aws/lambda/EcsFargateSpotFailoverStack-FargateFailbackOrchestrator" --follow &
 aws logs tail "/aws/lambda/EcsFargateSpotFailoverStack-SpotSuccessMonitor" --follow &
 aws logs tail "/aws/lambda/EcsFargateSpotFailoverStack-CleanupOrchestrator" --follow &
 ```
 
-## 🧹 清理资源
+## 🧹 Cleanup
 
 ```bash
-# 方法 1: 使用 CDK 销毁
+# Method 1: Use CDK destroy
 npm run destroy
 
-# 方法 2: 手动停止服务后销毁
+# Method 2: Manually stop services before destroying
 aws ecs update-service \
   --cluster fargate-spot-cluster \
   --service sample-app \
@@ -407,118 +380,57 @@ aws ecs update-service \
   --service sample-app-standard \
   --desired-count 0
 
-# 等待服务停止后
+# Wait for services to stop, then
 cdk destroy
 ```
 
-## 📚 文档
+## 📚 Documentation
 
-| 文档 | 描述 |
-|------|------|
-| [架构概述](docs/architecture-overview.md) | 系统架构和组件详情 |
-| [部署指南](docs/deployment-guide.md) | 详细部署步骤和配置 |
-| [执行指南](docs/execution-guide.md) | 系统执行和操作流程 |
-| [运维手册](docs/operations-manual.md) | 日常运维、监控和维护 |
-| [发布指南](docs/release-guide.md) | 发布管理和部署策略 |
-| [测试指南](docs/testing-guide.md) | 测试程序和验证策略 |
+| Document | Description |
+|----------|-------------|
+| [Architecture Overview](docs/architecture-overview.md) | System architecture and component details |
+| [Deployment Guide](docs/deployment-guide.md) | Detailed deployment steps and configuration |
+| [Execution Guide](docs/execution-guide.md) | System execution and operation procedures |
+| [Operations Manual](docs/operations-manual.md) | Daily operations, monitoring, and maintenance |
+| [Release Guide](docs/release-guide.md) | Release management and deployment strategies |
+| [Testing Guide](docs/testing-guide.md) | Testing procedures and validation strategies |
 
-## 🚀 CI/CD 流水线
+## 🤝 Contributing
 
-项目使用 GitHub Actions 实现完整的 CI/CD 流水线：
+Issues and Pull Requests are welcome!
 
-### 持续集成 (CI)
-
-每次 Push 或 Pull Request 时自动执行：
+### Development Workflow
 
 ```bash
-# 代码质量检查
-npm run lint
-npm run format:check
-
-# 类型检查
-npx tsc --noEmit
-
-# 单元测试
-npm run test:coverage
-
-# 构建
-npm run build
-
-# CDK 合成
-npx cdk synth
-```
-
-### 持续部署 (CD)
-
-#### 开发环境 (`develop` 分支)
-```bash
-git push origin develop
-# 自动触发部署
-```
-
-#### 预发布环境 (`main` 分支)
-```bash
-git push origin main
-# 自动触发部署
-```
-
-#### 生产环境 (手动触发)
-```bash
-# 1. 创建标签
-git tag -a v1.0.0 -m "Release v1.0.0"
-git push origin v1.0.0
-
-# 2. 在 GitHub Actions 页面手动触发生产部署
-```
-
-### 工作流文件
-
-| 工作流 | 触发条件 | 说明 |
-|--------|----------|------|
-| `ci.yml` | Push/PR 到 main/develop | 代码检查、测试、构建 |
-| `cd-dev.yml` | Push 到 develop | 部署到开发环境 |
-| `cd-staging.yml` | Push 到 main | 部署到预发布环境 |
-| `cd-prod.yml` | 手动触发 | 部署到生产环境 |
-| `release.yml` | 推送标签 | 创建 Release |
-
-详细配置请参考 [CI/CD 指南](docs/ci-cd-guide.md)。
-
-## 🤝 贡献指南
-
-欢迎提交 Issue 和 Pull Request 来改进这个项目！
-
-### 开发流程
-
-```bash
-# 1. Fork 并克隆项目
+# 1. Fork and clone
 git clone https://github.com/yourusername/ecs-fargate-spot-failover.git
 
-# 2. 创建功能分支
+# 2. Create feature branch
 git checkout -b feature/your-feature
 
-# 3. 安装依赖并构建
+# 3. Install deps and build
 npm install
 npm run build
 
-# 4. 运行测试
+# 4. Run tests
 npm test
 
-# 5. 提交更改
+# 5. Commit changes
 git commit -m "feat: add your feature"
 
-# 6. 推送并创建 PR
+# 6. Push and create PR
 git push origin feature/your-feature
 ```
 
-## 📄 许可证
+## 📄 License
 
-本项目基于 [MIT 许可证](LICENSE) 开源。
+This project is open-sourced under the [MIT License](LICENSE).
 
-## 🙏 致谢
+## 🙏 Acknowledgments
 
-- [AWS CDK](https://github.com/aws/aws-cdk) - 基础设施即代码框架
-- [AWS Fargate](https://aws.amazon.com/fargate/) - 无服务器容器计算
+- [AWS CDK](https://github.com/aws/aws-cdk) - Infrastructure as Code framework
+- [AWS Fargate](https://aws.amazon.com/fargate/) - Serverless container compute
 
 ---
 
-**免责声明**：本项目仅供学习和参考使用，在生产环境部署前请充分测试。
+**Disclaimer**: This project is for learning and reference purposes only. Please test thoroughly before deploying to production.

@@ -1,0 +1,243 @@
+name: CD - Staging
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  workflow_dispatch:
+    inputs:
+      sampleAppDesiredCount:
+        description: 'Sample App Desired Count'
+        required: false
+        default: '2'
+        type: string
+
+env:
+  NODE_VERSION: '18'
+  AWS_REGION: us-east-1
+  CDK_DEFAULT_REGION: us-east-1
+  ENVIRONMENT: staging
+
+jobs:
+  approval-check:
+    name: Approval Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check manual approval for staging
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "✅ Manual deployment approved"
+          else
+            echo "🔄 Auto-deployment from main branch"
+          fi
+
+  deploy:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: approval-check
+    environment: staging
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_STAGING }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: CDK Bootstrap (if needed)
+        run: npx cdk bootstrap aws://${{ secrets.AWS_ACCOUNT_ID_STAGING }}/${{ env.AWS_REGION }}
+        env:
+          CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID_STAGING }}
+
+      - name: CDK Diff
+        run: npx cdk diff
+        env:
+          CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID_STAGING }}
+
+      - name: Deploy to Staging
+        run: |
+          npx cdk deploy --require-approval never \
+            -c env=staging \
+            -c sampleAppDesiredCount=${{ github.event.inputs.sampleAppDesiredCount || '2' }}
+        env:
+          CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID_STAGING }}
+
+      - name: Get Stack Outputs
+        id: outputs
+        run: |
+          echo "cluster_name=$(aws cloudformation describe-stacks \
+            --stack-name EcsFargateSpotFailoverStack \
+            --query 'Stacks[0].Outputs[?OutputKey==`ClusterName`].OutputValue' \
+            --output text)" >> $GITHUB_OUTPUT
+          echo "alb_dns=$(aws cloudformation describe-stacks \
+            --stack-name EcsFargateSpotFailoverStack \
+            --query 'Stacks[0].Outputs[?OutputKey==`LoadBalancerDNS`].OutputValue' \
+            --output text)" >> $GITHUB_OUTPUT
+          echo "topic_arn=$(aws cloudformation describe-stacks \
+            --stack-name EcsFargateSpotFailoverStack \
+            --query 'Stacks[0].Outputs[?OutputKey==`NotificationTopicArn`].OutputValue' \
+            --output text)" >> $GITHUB_OUTPUT
+
+      - name: Create deployment notification
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          payload: |
+            {
+              "text": "🚀 Deployed to Staging",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "Staging Deployment Complete"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Commit:*\n${{ github.sha }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Author:*\n${{ github.actor }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Cluster:*\n${{ steps.outputs.outputs.cluster_name }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*ALB:*\nhttp://${{ steps.outputs.outputs.alb_dns }}"
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  integration-test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: deploy
+    environment: staging
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_STAGING }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Wait for services to stabilize
+        run: |
+          CLUSTER_NAME=$(aws cloudformation describe-stacks \
+            --stack-name EcsFargateSpotFailoverStack \
+            --query 'Stacks[0].Outputs[?OutputKey==`ClusterName`].OutputValue' \
+            --output text)
+          
+          SPOT_SERVICE=$(aws cloudformation describe-stacks \
+            --stack-name EcsFargateSpotFailoverStack \
+            --query 'Stacks[0].Outputs[?OutputKey==`SpotServiceName`].OutputValue' \
+            --output text)
+          
+          aws ecs wait services-stable \
+            --cluster $CLUSTER_NAME \
+            --services $SPOT_SERVICE
+
+      - name: Run integration tests
+        run: |
+          ALB_DNS=$(aws cloudformation describe-stacks \
+            --stack-name EcsFargateSpotFailoverStack \
+            --query 'Stacks[0].Outputs[?OutputKey==`LoadBalancerDNS`].OutputValue' \
+            --output text)
+          
+          echo "Running integration tests against http://$ALB_DNS"
+          
+          # Test 1: ALB health check
+          curl -f -s http://$ALB_DNS/ > /dev/null || exit 1
+          echo "✅ Test 1: ALB health check passed"
+          
+          # Test 2: Verify ECS services
+          CLUSTER_NAME=$(aws cloudformation describe-stacks \
+            --stack-name EcsFargateSpotFailoverStack \
+            --query 'Stacks[0].Outputs[?OutputKey==`ClusterName`].OutputValue' \
+            --output text)
+          
+          RUNNING_COUNT=$(aws ecs describe-services \
+            --cluster $CLUSTER_NAME \
+            --services sample-app \
+            --query 'services[0].runningCount' \
+            --output text)
+          
+          if [ "$RUNNING_COUNT" -gt 0 ]; then
+            echo "✅ Test 2: ECS services running ($RUNNING_COUNT tasks)"
+          else
+            echo "❌ Test 2: No running tasks"
+            exit 1
+          fi
+          
+          echo "All integration tests passed!"
+
+      - name: Test failover mechanism (dry run)
+        run: |
+          echo "Testing failover mechanism..."
+          
+          # Get DynamoDB table
+          TABLE_NAME=$(aws cloudformation describe-stacks \
+            --stack-name EcsFargateSpotFailoverStack \
+            --query 'Stacks[0].Outputs[?OutputKey==`ErrorCounterTableName`].OutputValue' \
+            --output text)
+          
+          # Insert test record
+          aws dynamodb put-item \
+            --table-name $TABLE_NAME \
+            --item '{
+              "service_name": {"S": "test-integration"},
+              "error_count": {"N": "1"},
+              "failover_state": {"M": {"failover_active": {"BOOL": false}}}
+            }'
+          
+          # Verify insert
+          RESULT=$(aws dynamodb get-item \
+            --table-name $TABLE_NAME \
+            --key '{"service_name": {"S": "test-integration"}}' \
+            --query 'Item.error_count.N' \
+            --output text)
+          
+          if [ "$RESULT" == "1" ]; then
+            echo "✅ DynamoDB integration test passed"
+          else
+            echo "❌ DynamoDB integration test failed"
+            exit 1
+          fi
+          
+          # Cleanup
+          aws dynamodb delete-item \
+            --table-name $TABLE_NAME \
+            --key '{"service_name": {"S": "test-integration"}}'

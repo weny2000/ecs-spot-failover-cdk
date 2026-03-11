@@ -1,0 +1,113 @@
+@startuml ECS Fargate Spot Failover Architecture
+
+!define AWSPuml https://raw.githubusercontent.com/awslabs/aws-icons-for-plantuml/v16.0/dist
+!include AWSPuml/AWSCommon.puml
+!include AWSPuml/Compute/all.puml
+!include AWSPuml/Storage/all.puml
+!include AWSPuml/NetworkingContentDelivery/all.puml
+!include AWSPuml/Database/all.puml
+!include AWSPuml/ApplicationIntegration/all.puml
+!include AWSPuml/ManagementGovernance/all.puml
+
+skinparam componentStyle rectangle
+skinparam linetype ortho
+skinparam backgroundColor #FEFEFE
+
+title ECS Fargate Spot Automatic Failover Architecture
+
+rectangle "AWS Cloud" as Cloud {
+    
+    rectangle "VPC (10.0.0.0/16)" as VPC #E8F4FD {
+        
+        rectangle "Public Subnets\n(10.0.1.0/24, 10.0.2.0/24)" as PublicSubnet #FFF8DC {
+            ElasticLoadBalancingApplicationLoadBalancer(alb, "Application\nLoad Balancer\nPort: 80", "")
+            NATGateway(nat, "NAT\nGateway", "")
+        }
+        
+        rectangle "Private Subnets\n(10.0.3.0/24, 10.0.4.0/24)" as PrivateSubnet #F0E6F5 {
+            
+            rectangle "ECS Cluster\nfargate-spot-cluster" as ECSCluster {
+                
+                rectangle "Fargate Spot Service\nsample-app" as SpotService #D4EDDA {
+                    Fargate(spot1, "Task 1\nNginx\nCPU: 256", "")
+                    Fargate(spot2, "Task 2\nNginx\nCPU: 256", "")
+                }
+                
+                rectangle "Fargate Standard Service\nsample-app-standard\n(Standby)" as StandardService #FFF3CD {
+                    Fargate(standard1, "Standby Task\nNginx\nCPU: 256", "")
+                }
+                
+                rectangle "Target Groups" as TargetGroups {
+                    rectangle "Spot TG" as SpotTG #D4EDDA
+                    rectangle "Standard TG" as StandardTG #FFF3CD
+                }
+            }
+        }
+    }
+    
+    rectangle "Serverless Components" as Serverless #FFE6E6 {
+        EventBridge(eventbridge, "EventBridge\nECS Task State Change", "")
+        
+        Lambda(spotErrorDetector, "Spot Error\nDetector", "")
+        Lambda(spotSuccessMonitor, "Spot Success\nMonitor", "")
+        Lambda(failbackOrchestrator, "Failback\nOrchestrator", "")
+        Lambda(cleanupOrchestrator, "Cleanup\nOrchestrator", "")
+        
+        DynamoDB(dynamodb, "DynamoDB\nfargate-spot-error-counter", "")
+        SimpleNotificationService(sns, "SNS\nNotifications", "")
+        CloudWatch(cloudwatch, "CloudWatch\nLogs", "")
+    }
+}
+
+' Connections
+alb --> SpotTG : Primary
+alb --> StandardTG : Failover (orange)
+SpotTG --> SpotService
+StandardTG --> StandardService
+
+' EventBridge to Lambda
+eventbridge --> spotErrorDetector : STOPPED events
+eventbridge --> spotSuccessMonitor : RUNNING events
+
+' Lambda to Lambda
+spotErrorDetector ..> failbackOrchestrator : Invoke (if threshold)
+spotSuccessMonitor ..> cleanupOrchestrator : Invoke (if recovering)
+
+' Lambda to ECS
+failbackOrchestrator --> StandardService : Start
+failbackOrchestrator --> SpotService : Stop (red)
+cleanupOrchestrator --> SpotService : Start (green)
+cleanupOrchestrator --> StandardService : Stop (red, dashed)
+
+' Lambda to DynamoDB
+spotErrorDetector --> dynamodb : Update error count
+spotSuccessMonitor --> dynamodb : Reset error count
+failbackOrchestrator --> dynamodb : Update state
+cleanupOrchestrator --> dynamodb : Clear state
+
+' Lambda to SNS
+failbackOrchestrator --> sns : Send notification
+cleanupOrchestrator --> sns : Send notification
+
+' Lambda to CloudWatch
+spotErrorDetector ..> cloudwatch : Logs
+spotSuccessMonitor ..> cloudwatch : Logs
+failbackOrchestrator ..> cloudwatch : Logs
+cleanupOrchestrator ..> cloudwatch : Logs
+
+' NAT Gateway
+nat ..> spot1 : Outbound traffic
+nat ..> spot2 : Outbound traffic
+nat ..> standard1 : Outbound traffic
+
+legend right
+    |= Color |= Meaning |
+    | <#D4EDDA> | Fargate Spot (Cost Optimized) |
+    | <#FFF3CD> | Fargate Standard (High Availability) |
+    | <#E8F4FD> | VPC Network |
+    | <#FFF8DC> | Public Subnet |
+    | <#F0E6F5> | Private Subnet |
+    | <#FFE6E6> | Serverless Components |
+endlegend
+
+@enduml

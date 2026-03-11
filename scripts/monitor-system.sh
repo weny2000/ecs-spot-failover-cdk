@@ -42,7 +42,8 @@ show_dynamodb_status() {
             "Service: " + .service_name.S + 
             " | Error Count: " + (.error_count.N // "0") + 
             " | Last Error: " + (.last_error_time.S // "None") + 
-            " | Failover: " + (if .failover_state.M.failover_active.BOOL then "Active" else "Inactive" end)'
+            " | Failover: " + (if (.failover_state.M.failover_active.BOOL // false) then "Active" else "Inactive" end) + 
+            " | Cleanup: " + (if (.cleanup_in_progress.BOOL // false) then "In Progress" else "Idle" end)' 2>/dev/null
     else
         echo "Unable to access DynamoDB table"
     fi

@@ -1,0 +1,270 @@
+{
+  "Comment": "ECS Fargate Spot Cleanup Workflow - Handles switching back from Standard to Spot Fargate",
+  "StartAt": "GetFailoverState",
+  "States": {
+    "GetFailoverState": {
+      "Type": "Task",
+      "Comment": "Get failover state from DynamoDB",
+      "Resource": "arn:aws:states:::dynamodb:getItem",
+      "Parameters": {
+        "TableName": "${ErrorCounterTable}",
+        "Key": {
+          "service_name": {
+            "S.$": "$.serviceName"
+          }
+        }
+      },
+      "ResultPath": "$.failoverStateResult",
+      "Next": "CheckFailoverActive",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "SendFailureNotification"
+        }
+      ]
+    },
+    "CheckFailoverActive": {
+      "Type": "Choice",
+      "Comment": "Check if failover is still active",
+      "Choices": [
+        {
+          "Variable": "$.failoverStateResult.Item.failover_state.M.failover_active.BOOL",
+          "BooleanEquals": true,
+          "Next": "WaitForCleanupDelay"
+        }
+      ],
+      "Default": "SkipCleanup"
+    },
+    "WaitForCleanupDelay": {
+      "Type": "Wait",
+      "Comment": "Wait for Spot instances to stabilize before cleanup",
+      "SecondsPath": "$.cleanupDelay",
+      "Default": 30,
+      "Next": "StartSpotService"
+    },
+    "StartSpotService": {
+      "Type": "Task",
+      "Comment": "Start the Spot service with original desired count",
+      "Resource": "arn:aws:states:::aws-sdk:ecs:updateService",
+      "Parameters": {
+        "Cluster.$": "$.clusterName",
+        "Service.$": "$.spotServiceName",
+        "DesiredCount.$": "$.failoverStateResult.Item.failover_state.M.original_desired_count.N"
+      },
+      "ResultPath": "$.startResult",
+      "Next": "WaitForSpotService",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "SendFailureNotification"
+        }
+      ]
+    },
+    "WaitForSpotService": {
+      "Type": "Wait",
+      "Comment": "Wait for Spot service to start tasks",
+      "Seconds": 30,
+      "Next": "CheckSpotServiceStable"
+    },
+    "CheckSpotServiceStable": {
+      "Type": "Task",
+      "Comment": "Check if Spot service has reached stable state",
+      "Resource": "arn:aws:states:::aws-sdk:ecs:describeServices",
+      "Parameters": {
+        "Cluster.$": "$.clusterName",
+        "Services.$": "States.Array($.spotServiceName)"
+      },
+      "ResultPath": "$.checkResult",
+      "Next": "IsSpotServiceStable",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "SendFailureNotification"
+        }
+      ]
+    },
+    "IsSpotServiceStable": {
+      "Type": "Choice",
+      "Comment": "Check if Spot service is stable",
+      "Choices": [
+        {
+          "And": [
+            {
+              "Variable": "$.checkResult.Services[0].RunningCount",
+              "NumericEqualsPath": "$.checkResult.Services[0].DesiredCount"
+            },
+            {
+              "Variable": "$.checkResult.Services[0].PendingCount",
+              "NumericEquals": 0
+            }
+          ],
+          "Next": "StopStandardService"
+        }
+      ],
+      "Default": "WaitForSpotService"
+    },
+    "StopStandardService": {
+      "Type": "Task",
+      "Comment": "Stop the standard Fargate service",
+      "Resource": "arn:aws:states:::aws-sdk:ecs:updateService",
+      "Parameters": {
+        "Cluster.$": "$.clusterName",
+        "Service.$": "$.standardServiceName",
+        "DesiredCount": 0
+      },
+      "ResultPath": "$.stopResult",
+      "Next": "WaitForStandardServiceStop",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "SendFailureNotification"
+        }
+      ]
+    },
+    "WaitForStandardServiceStop": {
+      "Type": "Wait",
+      "Comment": "Wait for standard service to stop tasks",
+      "Seconds": 30,
+      "Next": "CheckStandardServiceStopped"
+    },
+    "CheckStandardServiceStopped": {
+      "Type": "Task",
+      "Comment": "Check if standard service has stopped all tasks",
+      "Resource": "arn:aws:states:::aws-sdk:ecs:describeServices",
+      "Parameters": {
+        "Cluster.$": "$.clusterName",
+        "Services.$": "States.Array($.standardServiceName)"
+      },
+      "ResultPath": "$.checkStandardResult",
+      "Next": "IsStandardServiceStopped",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "SendFailureNotification"
+        }
+      ]
+    },
+    "IsStandardServiceStopped": {
+      "Type": "Choice",
+      "Comment": "Check if standard service has stopped",
+      "Choices": [
+        {
+          "And": [
+            {
+              "Variable": "$.checkStandardResult.Services[0].RunningCount",
+              "NumericEquals": 0
+            },
+            {
+              "Variable": "$.checkStandardResult.Services[0].PendingCount",
+              "NumericEquals": 0
+            }
+          ],
+          "Next": "ClearFailoverState"
+        }
+      ],
+      "Default": "WaitForStandardServiceStop"
+    },
+    "ClearFailoverState": {
+      "Type": "Task",
+      "Comment": "Clear failover state in DynamoDB",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "${ErrorCounterTable}",
+        "Key": {
+          "service_name": {
+            "S.$": "$.serviceName"
+          }
+        },
+        "UpdateExpression": "SET failover_state = :state, cleanup_time = :time, cleanup_in_progress = :false",
+        "ExpressionAttributeValues": {
+          ":state": {
+            "M": {
+              "failover_active": {
+                "BOOL": false
+              }
+            }
+          },
+          ":time": {
+            "S.$": "States.ArrayGetItem(States.StringSplit(States.JsonToString(States.ArrayGetItem(States.StringSplit(States.JsonToString($), ':'), 0)), '.'), 0)"
+          },
+          ":false": {
+            "BOOL": false
+          }
+        }
+      },
+      "ResultPath": "$.clearResult",
+      "Next": "ResetErrorCount",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "SendFailureNotification"
+        }
+      ]
+    },
+    "ResetErrorCount": {
+      "Type": "Task",
+      "Comment": "Reset error count in DynamoDB",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "${ErrorCounterTable}",
+        "Key": {
+          "service_name": {
+            "S.$": "$.serviceName"
+          }
+        },
+        "UpdateExpression": "SET error_count = :zero",
+        "ExpressionAttributeValues": {
+          ":zero": {
+            "N": "0"
+          }
+        }
+      },
+      "ResultPath": "$.resetResult",
+      "Next": "SendSuccessNotification",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "SendFailureNotification"
+        }
+      ]
+    },
+    "SendSuccessNotification": {
+      "Type": "Task",
+      "Comment": "Send SNS notification about successful recovery",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "${NotificationTopicArn}",
+        "Subject": "ECS Spot Recovery Completed",
+        "Message.$": "States.JsonToString($)"
+      },
+      "End": true
+    },
+    "SendFailureNotification": {
+      "Type": "Task",
+      "Comment": "Send SNS notification about recovery failure",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "${NotificationTopicArn}",
+        "Subject": "ECS Spot Recovery Failed",
+        "Message.$": "States.JsonToString($)"
+      },
+      "Next": "Fail"
+    },
+    "SkipCleanup": {
+      "Type": "Pass",
+      "Comment": "No active failover, skip cleanup",
+      "End": true
+    },
+    "Fail": {
+      "Type": "Fail",
+      "Cause": "Cleanup workflow failed"
+    }
+  }
+}

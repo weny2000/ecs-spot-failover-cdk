@@ -1,0 +1,176 @@
+{
+  "Comment": "ECS Fargate Spot Failover Workflow - Handles automatic failover from Spot to Standard Fargate",
+  "StartAt": "DescribeSpotService",
+  "States": {
+    "DescribeSpotService": {
+      "Type": "Task",
+      "Comment": "Get current Spot service information including desired count",
+      "Resource": "arn:aws:states:::aws-sdk:ecs:describeServices",
+      "Parameters": {
+        "Cluster.$": "$.clusterName",
+        "Services.$": "States.Array($.spotServiceName)"
+      },
+      "ResultPath": "$.describeResult",
+      "Next": "StartStandardService",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "SendFailureNotification"
+        }
+      ]
+    },
+    "StartStandardService": {
+      "Type": "Task",
+      "Comment": "Start the standard Fargate service",
+      "Resource": "arn:aws:states:::aws-sdk:ecs:updateService",
+      "Parameters": {
+        "Cluster.$": "$.clusterName",
+        "Service.$": "$.standardServiceName",
+        "DesiredCount.$": "$.describeResult.Services[0].DesiredCount"
+      },
+      "ResultPath": "$.startResult",
+      "Next": "WaitForStandardService",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "SendFailureNotification"
+        }
+      ]
+    },
+    "WaitForStandardService": {
+      "Type": "Wait",
+      "Comment": "Wait for standard service to start tasks",
+      "Seconds": 30,
+      "Next": "CheckStandardServiceStable"
+    },
+    "CheckStandardServiceStable": {
+      "Type": "Task",
+      "Comment": "Check if standard service has reached stable state",
+      "Resource": "arn:aws:states:::aws-sdk:ecs:describeServices",
+      "Parameters": {
+        "Cluster.$": "$.clusterName",
+        "Services.$": "States.Array($.standardServiceName)"
+      },
+      "ResultPath": "$.checkResult",
+      "Next": "IsStandardServiceStable",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "SendFailureNotification"
+        }
+      ]
+    },
+    "IsStandardServiceStable": {
+      "Type": "Choice",
+      "Comment": "Check if standard service is stable",
+      "Choices": [
+        {
+          "And": [
+            {
+              "Variable": "$.checkResult.Services[0].RunningCount",
+              "NumericEqualsPath": "$.checkResult.Services[0].DesiredCount"
+            },
+            {
+              "Variable": "$.checkResult.Services[0].PendingCount",
+              "NumericEquals": 0
+            }
+          ],
+          "Next": "StopSpotService"
+        }
+      ],
+      "Default": "WaitForStandardService"
+    },
+    "StopSpotService": {
+      "Type": "Task",
+      "Comment": "Stop the Spot service",
+      "Resource": "arn:aws:states:::aws-sdk:ecs:updateService",
+      "Parameters": {
+        "Cluster.$": "$.clusterName",
+        "Service.$": "$.spotServiceName",
+        "DesiredCount": 0
+      },
+      "ResultPath": "$.stopResult",
+      "Next": "WaitForSpotServiceStop",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "SendFailureNotification"
+        }
+      ]
+    },
+    "WaitForSpotServiceStop": {
+      "Type": "Wait",
+      "Comment": "Wait for Spot service to stop tasks",
+      "Seconds": 30,
+      "Next": "CheckSpotServiceStopped"
+    },
+    "CheckSpotServiceStopped": {
+      "Type": "Task",
+      "Comment": "Check if Spot service has stopped all tasks",
+      "Resource": "arn:aws:states:::aws-sdk:ecs:describeServices",
+      "Parameters": {
+        "Cluster.$": "$.clusterName",
+        "Services.$": "States.Array($.spotServiceName)"
+      },
+      "ResultPath": "$.checkSpotResult",
+      "Next": "IsSpotServiceStopped",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "SendFailureNotification"
+        }
+      ]
+    },
+    "IsSpotServiceStopped": {
+      "Type": "Choice",
+      "Comment": "Check if Spot service has stopped",
+      "Choices": [
+        {
+          "And": [
+            {
+              "Variable": "$.checkSpotResult.Services[0].RunningCount",
+              "NumericEquals": 0
+            },
+            {
+              "Variable": "$.checkSpotResult.Services[0].PendingCount",
+              "NumericEquals": 0
+            }
+          ],
+          "Next": "SendSuccessNotification"
+        }
+      ],
+      "Default": "WaitForSpotServiceStop"
+    },
+    "SendSuccessNotification": {
+      "Type": "Task",
+      "Comment": "Send SNS notification about successful failover",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "${NotificationTopicArn}",
+        "Subject": "ECS Spot Failover Completed",
+        "Message.$": "States.JsonToString($)"
+      },
+      "End": true
+    },
+    "SendFailureNotification": {
+      "Type": "Task",
+      "Comment": "Send SNS notification about failover failure",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "${NotificationTopicArn}",
+        "Subject": "ECS Spot Failover Failed",
+        "Message.$": "States.JsonToString($)"
+      },
+      "Next": "Fail"
+    },
+    "Fail": {
+      "Type": "Fail",
+      "Cause": "Failover workflow failed"
+    }
+  }
+}

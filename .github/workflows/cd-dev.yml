@@ -1,0 +1,175 @@
+name: CD - Development
+
+on:
+  push:
+    branches: [develop]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  workflow_dispatch:
+    inputs:
+      sampleAppDesiredCount:
+        description: 'Sample App Desired Count'
+        required: false
+        default: '1'
+        type: string
+
+env:
+  NODE_VERSION: '18'
+  AWS_REGION: us-east-1
+  CDK_DEFAULT_REGION: us-east-1
+  ENVIRONMENT: dev
+
+jobs:
+  deploy:
+    name: Deploy to Development
+    runs-on: ubuntu-latest
+    environment: development
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_DEV }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: CDK Bootstrap (if needed)
+        run: npx cdk bootstrap aws://${{ secrets.AWS_ACCOUNT_ID_DEV }}/${{ env.AWS_REGION }}
+        env:
+          CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID_DEV }}
+
+      - name: CDK Diff
+        run: npx cdk diff
+        env:
+          CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID_DEV }}
+
+      - name: Deploy to Development
+        run: |
+          npx cdk deploy --require-approval never \
+            -c env=dev \
+            -c sampleAppDesiredCount=${{ github.event.inputs.sampleAppDesiredCount || '1' }}
+        env:
+          CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID_DEV }}
+
+      - name: Get Stack Outputs
+        id: outputs
+        run: |
+          echo "cluster_name=$(aws cloudformation describe-stacks \
+            --stack-name EcsFargateSpotFailoverStack \
+            --query 'Stacks[0].Outputs[?OutputKey==`ClusterName`].OutputValue' \
+            --output text)" >> $GITHUB_OUTPUT
+          echo "alb_dns=$(aws cloudformation describe-stacks \
+            --stack-name EcsFargateSpotFailoverStack \
+            --query 'Stacks[0].Outputs[?OutputKey==`LoadBalancerDNS`].OutputValue' \
+            --output text)" >> $GITHUB_OUTPUT
+
+      - name: Comment deployment info
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: comment } = await github.rest.repos.createCommitComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: context.sha,
+              body: `🚀 Deployed to Development
+              
+              - Cluster: ${{ steps.outputs.outputs.cluster_name }}
+              - ALB DNS: http://${{ steps.outputs.outputs.alb_dns }}
+              - Region: ${{ env.AWS_REGION }}`
+            })
+
+  smoke-test:
+    name: Smoke Tests
+    runs-on: ubuntu-latest
+    needs: deploy
+    environment: development
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_DEV }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Wait for services to stabilize
+        run: |
+          CLUSTER_NAME=$(aws cloudformation describe-stacks \
+            --stack-name EcsFargateSpotFailoverStack \
+            --query 'Stacks[0].Outputs[?OutputKey==`ClusterName`].OutputValue' \
+            --output text)
+          
+          SPOT_SERVICE=$(aws cloudformation describe-stacks \
+            --stack-name EcsFargateSpotFailoverStack \
+            --query 'Stacks[0].Outputs[?OutputKey==`SpotServiceName`].OutputValue' \
+            --output text)
+          
+          echo "Waiting for services to stabilize..."
+          aws ecs wait services-stable \
+            --cluster $CLUSTER_NAME \
+            --services $SPOT_SERVICE
+
+      - name: Test ALB endpoint
+        run: |
+          ALB_DNS=$(aws cloudformation describe-stacks \
+            --stack-name EcsFargateSpotFailoverStack \
+            --query 'Stacks[0].Outputs[?OutputKey==`LoadBalancerDNS`].OutputValue' \
+            --output text)
+          
+          echo "Testing ALB endpoint: http://$ALB_DNS"
+          
+          # Retry up to 10 times with 10 second delay
+          for i in {1..10}; do
+            if curl -f -s http://$ALB_DNS > /dev/null; then
+              echo "✅ ALB endpoint is healthy"
+              exit 0
+            fi
+            echo "Attempt $i failed, retrying..."
+            sleep 10
+          done
+          
+          echo "❌ ALB endpoint health check failed"
+          exit 1
+
+      - name: Test Lambda functions
+        run: |
+          DETECTOR_NAME=$(aws lambda list-functions \
+            --query 'Functions[?contains(FunctionName, `SpotErrorDetector`)].FunctionName' \
+            --output text)
+          
+          echo "Testing Lambda: $DETECTOR_NAME"
+          
+          aws lambda invoke \
+            --function-name $DETECTOR_NAME \
+            --payload '{"detail":{"clusterArn":"arn:aws:ecs:us-east-1:${{ secrets.AWS_ACCOUNT_ID_DEV }}:cluster/fargate-spot-cluster","taskArn":"arn:aws:ecs:us-east-1:${{ secrets.AWS_ACCOUNT_ID_DEV }}:task/test","group":"service:sample-app","lastStatus":"STOPPED","stoppedReason":"SpotInterruption"}}' \
+            /dev/stdout
+
+      - name: Verify DynamoDB table
+        run: |
+          TABLE_NAME=$(aws cloudformation describe-stacks \
+            --stack-name EcsFargateSpotFailoverStack \
+            --query 'Stacks[0].Outputs[?OutputKey==`ErrorCounterTableName`].OutputValue' \
+            --output text)
+          
+          echo "Verifying DynamoDB table: $TABLE_NAME"
+          aws dynamodb describe-table --table-name $TABLE_NAME

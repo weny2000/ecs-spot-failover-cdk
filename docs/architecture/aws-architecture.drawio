@@ -1,0 +1,249 @@
+<mxfile host="app.diagrams.net" modified="2024-01-01T00:00:00.000Z" agent="Mozilla/5.0" etag="architecture" version="22.0.0" type="device">
+  <diagram id="ecs-fargate-spot-failover" name="ECS Fargate Spot Failover Architecture">
+    <mxGraphModel dx="2000" dy="1200" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        
+        <!-- Title -->
+        <mxCell id="title" value="&lt;b&gt;ECS Fargate Spot Automatic Failover Architecture&lt;/b&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;" vertex="1" parent="1">
+          <mxGeometry x="400" y="20" width="800" height="40" as="geometry" />
+        </mxCell>
+        
+        <!-- AWS Cloud Container -->
+        <mxCell id="aws-cloud" value="&lt;b&gt;AWS Cloud&lt;/b&gt;" style="swimlane;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;startSize=30;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="40" y="80" width="1520" height="1060" as="geometry" />
+        </mxCell>
+        
+        <!-- Region Label -->
+        <mxCell id="region" value="Region: us-east-1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontStyle=2" vertex="1" parent="aws-cloud">
+          <mxGeometry x="20" y="40" width="150" height="20" as="geometry" />
+        </mxCell>
+        
+        <!-- VPC Container -->
+        <mxCell id="vpc" value="&lt;b&gt;VPC (10.0.0.0/16)&lt;/b&gt;" style="swimlane;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;startSize=30;fontSize=12;" vertex="1" parent="aws-cloud">
+          <mxGeometry x="20" y="70" width="1480" height="620" as="geometry" />
+        </mxCell>
+        
+        <!-- Availability Zone 1a Label -->
+        <mxCell id="az1a" value="&lt;b&gt;AZ 1a&lt;/b&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;" vertex="1" parent="vpc">
+          <mxGeometry x="20" y="50" width="60" height="20" as="geometry" />
+        </mxCell>
+        
+        <!-- Availability Zone 1b Label -->
+        <mxCell id="az1b" value="&lt;b&gt;AZ 1b&lt;/b&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;" vertex="1" parent="vpc">
+          <mxGeometry x="750" y="50" width="60" height="20" as="geometry" />
+        </mxCell>
+        
+        <!-- Public Subnet Container -->
+        <mxCell id="public-subnet" value="&lt;b&gt;Public Subnet&lt;/b&gt;&#xa;10.0.1.0/24 (AZ1a)&#xa;10.0.2.0/24 (AZ1b)" style="swimlane;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;startSize=50;fontSize=11;" vertex="1" parent="vpc">
+          <mxGeometry x="20" y="80" width="1440" height="150" as="geometry" />
+        </mxCell>
+        
+        <!-- Application Load Balancer -->
+        <mxCell id="alb" value="&lt;b&gt;Application Load Balancer&lt;/b&gt;&#xa;Port: 80&#xa;Internet-facing" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#8C4FFF;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=12;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.elastic_load_balancing;" vertex="1" parent="public-subnet">
+          <mxGeometry x="640" y="30" width="78" height="78" as="geometry" />
+        </mxCell>
+        
+        <!-- NAT Gateway -->
+        <mxCell id="nat-gateway" value="&lt;b&gt;NAT Gateway&lt;/b&gt;" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#8C4FFF;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.nat_gateway;" vertex="1" parent="public-subnet">
+          <mxGeometry x="200" y="40" width="60" height="60" as="geometry" />
+        </mxCell>
+        
+        <!-- Private Subnet Container -->
+        <mxCell id="private-subnet" value="&lt;b&gt;Private Subnet&lt;/b&gt;&#xa;10.0.3.0/24 (AZ1a)&#xa;10.0.4.0/24 (AZ1b)" style="swimlane;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;startSize=50;fontSize=11;" vertex="1" parent="vpc">
+          <mxGeometry x="20" y="260" width="1440" height="340" as="geometry" />
+        </mxCell>
+        
+        <!-- ECS Cluster Label -->
+        <mxCell id="ecs-cluster-label" value="&lt;b&gt;ECS Cluster&lt;/b&gt;&#xa;fargate-spot-cluster" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontStyle=1" vertex="1" parent="private-subnet">
+          <mxGeometry x="20" y="50" width="150" height="30" as="geometry" />
+        </mxCell>
+        
+        <!-- Fargate Spot Service -->
+        <mxCell id="fargate-spot-service" value="&lt;b&gt;Fargate Spot Service&lt;/b&gt;&#xa;sample-app&#xa;Capacity: FARGATE_SPOT&#xa;Desired: 2" style="swimlane;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;startSize=70;fontSize=11;" vertex="1" parent="private-subnet">
+          <mxGeometry x="40" y="100" width="280" height="200" as="geometry" />
+        </mxCell>
+        
+        <!-- Spot Task 1 -->
+        <mxCell id="spot-task-1" value="&lt;b&gt;Task 1&lt;/b&gt;&#xa;Nginx Container&#xa;Port: 80&#xa;CPU: 256&#xa;Memory: 512" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#ED7100;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.fargate;" vertex="1" parent="fargate-spot-service">
+          <mxGeometry x="40" y="100" width="50" height="50" as="geometry" />
+        </mxCell>
+        
+        <!-- Spot Task 2 -->
+        <mxCell id="spot-task-2" value="&lt;b&gt;Task 2&lt;/b&gt;&#xa;Nginx Container&#xa;Port: 80&#xa;CPU: 256&#xa;Memory: 512" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#ED7100;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.fargate;" vertex="1" parent="fargate-spot-service">
+          <mxGeometry x="160" y="100" width="50" height="50" as="geometry" />
+        </mxCell>
+        
+        <!-- Fargate Standard Service -->
+        <mxCell id="fargate-standard-service" value="&lt;b&gt;Fargate Standard Service&lt;/b&gt;&#xa;sample-app-standard&#xa;Capacity: FARGATE&#xa;Desired: 0→2 (on failover)" style="swimlane;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;startSize=80;fontSize=11;" vertex="1" parent="private-subnet">
+          <mxGeometry x="380" y="100" width="280" height="200" as="geometry" />
+        </mxCell>
+        
+        <!-- Standard Task (Standby) -->
+        <mxCell id="standard-task" value="&lt;b&gt;Standby&lt;/b&gt;&#xa;Nginx Container&#xa;Port: 80&#xa;CPU: 256&#xa;Memory: 512" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#ED7100;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.fargate;" vertex="1" parent="fargate-standard-service">
+          <mxGeometry x="100" y="110" width="50" height="50" as="geometry" />
+        </mxCell>
+        
+        <!-- Target Groups -->
+        <mxCell id="spot-target-group" value="Target Group&#xa;(Spot)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="private-subnet">
+          <mxGeometry x="700" y="120" width="100" height="50" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="standard-target-group" value="Target Group&#xa;(Standard)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;" vertex="1" parent="private-subnet">
+          <mxGeometry x="700" y="200" width="100" height="50" as="geometry" />
+        </mxCell>
+        
+        <!-- Serverless Components Container -->
+        <mxCell id="serverless" value="&lt;b&gt;Serverless Components&lt;/b&gt;" style="swimlane;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;startSize=30;fontSize=12;" vertex="1" parent="aws-cloud">
+          <mxGeometry x="20" y="710" width="1000" height="320" as="geometry" />
+        </mxCell>
+        
+        <!-- EventBridge -->
+        <mxCell id="eventbridge" value="&lt;b&gt;EventBridge&lt;/b&gt;&#xa;ECS Task State Change&#xa;Events" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#E7157B;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=11;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.eventbridge;" vertex="1" parent="serverless">
+          <mxGeometry x="40" y="70" width="60" height="60" as="geometry" />
+        </mxCell>
+        
+        <!-- Spot Error Detector Lambda -->
+        <mxCell id="spot-error-detector" value="&lt;b&gt;Spot Error Detector&lt;/b&gt;&#xa;Lambda Function&#xa;• Detect Spot errors&#xa;• Update error count&#xa;• Trigger failover" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#D05C17;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.lambda;" vertex="1" parent="serverless">
+          <mxGeometry x="200" y="50" width="60" height="60" as="geometry" />
+        </mxCell>
+        
+        <!-- Spot Success Monitor Lambda -->
+        <mxCell id="spot-success-monitor" value="&lt;b&gt;Spot Success Monitor&lt;/b&gt;&#xa;Lambda Function&#xa;• Detect success events&#xa;• Reset error count&#xa;• Trigger cleanup" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#D05C17;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.lambda;" vertex="1" parent="serverless">
+          <mxGeometry x="200" y="150" width="60" height="60" as="geometry" />
+        </mxCell>
+        
+        <!-- Failback Orchestrator Lambda -->
+        <mxCell id="failback-orchestrator" value="&lt;b&gt;Failback Orchestrator&lt;/b&gt;&#xa;Lambda Function&#xa;• Start standard service&#xa;• Stop Spot service&#xa;• Update DynamoDB" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#D05C17;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.lambda;" vertex="1" parent="serverless">
+          <mxGeometry x="450" y="50" width="60" height="60" as="geometry" />
+        </mxCell>
+        
+        <!-- Cleanup Orchestrator Lambda -->
+        <mxCell id="cleanup-orchestrator" value="&lt;b&gt;Cleanup Orchestrator&lt;/b&gt;&#xa;Lambda Function&#xa;• Restore Spot service&#xa;• Stop standard service&#xa;• Update DynamoDB" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#D05C17;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.lambda;" vertex="1" parent="serverless">
+          <mxGeometry x="450" y="150" width="60" height="60" as="geometry" />
+        </mxCell>
+        
+        <!-- DynamoDB -->
+        <mxCell id="dynamodb" value="&lt;b&gt;DynamoDB&lt;/b&gt;&#xa;fargate-spot-error-counter&#xa;• error_count&#xa;• failover_state&#xa;• cleanup_state" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#C925D1;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.dynamodb;" vertex="1" parent="serverless">
+          <mxGeometry x="650" y="100" width="60" height="60" as="geometry" />
+        </mxCell>
+        
+        <!-- SNS -->
+        <mxCell id="sns" value="&lt;b&gt;SNS&lt;/b&gt;&#xa;Notifications&#xa;• Email&#xa;• Slack&#xa;• SMS" style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#FF4F8B;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.sns;" vertex="1" parent="serverless">
+          <mxGeometry x="820" y="100" width="60" height="60" as="geometry" />
+        </mxCell>
+        
+        <!-- CloudWatch Logs -->
+        <mxCell id="cloudwatch" value="&lt;b&gt;CloudWatch Logs&lt;/b&gt;&#xa;/aws/lambda/...&#xa;/ecs/..." style="sketch=0;points=[[0,0,0],[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0,0],[0,1,0],[0.25,1,0],[0.5,1,0],[0.75,1,0],[1,1,0],[0,0.25,0],[0,0.5,0],[0,0.75,0],[1,0.25,0],[1,0.5,0],[1,0.75,0]];outlineConnect=0;fontColor=#232F3E;fillColor=#E7157B;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;fontStyle=0;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.cloudwatch;" vertex="1" parent="serverless">
+          <mxGeometry x="650" y="220" width="60" height="60" as="geometry" />
+        </mxCell>
+        
+        <!-- Monitoring & Data Flow Container -->
+        <mxCell id="monitoring" value="&lt;b&gt;Data Flow&lt;/b&gt;" style="swimlane;whiteSpace=wrap;html=1;fillColor=#d4e1f5;strokeColor=#6c8ebf;startSize=30;fontSize=12;" vertex="1" parent="aws-cloud">
+          <mxGeometry x="1040" y="710" width="460" height="320" as="geometry" />
+        </mxCell>
+        
+        <!-- Legend -->
+        <mxCell id="legend" value="&lt;b&gt;Legend&lt;/b&gt;&#xa;&#xa;&lt;font color=#d5e8d4&gt;■&lt;/font&gt; Fargate Spot (Cost Optimized)&#xa;&lt;font color=#ffe6cc&gt;■&lt;/font&gt; Fargate Standard (High Availability)&#xa;&lt;font color=#f5f5f5&gt;■&lt;/font&gt; VPC Network&#xa;&lt;font color=#fff2cc&gt;■&lt;/font&gt; Public Subnet&#xa;&lt;font color=#e1d5e7&gt;■&lt;/font&gt; Private Subnet&#xa;&lt;font color=#f8cecc&gt;■&lt;/font&gt; Serverless Components" style="text;html=1;strokeColor=#666666;fillColor=#ffffff;align=left;verticalAlign=top;whiteSpace=wrap;rounded=1;fontSize=10;spacingLeft=5;" vertex="1" parent="monitoring">
+          <mxGeometry x="20" y="50" width="200" height="140" as="geometry" />
+        </mxCell>
+        
+        <!-- Failover Flow -->
+        <mxCell id="failover-flow" value="&lt;b&gt;Failover Flow:&lt;/b&gt;&#xa;1. Spot Error Detected&#xa;2. Error Count ↑&#xa;3. Threshold Reached&#xa;4. Start Standard&#xa;5. Stop Spot&#xa;6. Update State" style="text;html=1;strokeColor=none;fillColor=#ffcccc;align=left;verticalAlign=top;whiteSpace=wrap;rounded=1;fontSize=9;" vertex="1" parent="monitoring">
+          <mxGeometry x="240" y="50" width="100" height="100" as="geometry" />
+        </mxCell>
+        
+        <!-- Recovery Flow -->
+        <mxCell id="recovery-flow" value="&lt;b&gt;Recovery Flow:&lt;/b&gt;&#xa;1. Spot Success Detected&#xa;2. Reset Error Count&#xa;3. Start Spot&#xa;4. Stop Standard&#xa;5. Clear State" style="text;html=1;strokeColor=none;fillColor=#ccffcc;align=left;verticalAlign=top;whiteSpace=wrap;rounded=1;fontSize=9;" vertex="1" parent="monitoring">
+          <mxGeometry x="240" y="170" width="100" height="90" as="geometry" />
+        </mxCell>
+        
+        <!-- Connection: ALB to Spot Target Group -->
+        <mxCell id="conn-alb-spot" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#009900;fontSize=11;" edge="1" parent="1" source="alb" target="spot-target-group">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        
+        <!-- Connection: ALB to Standard Target Group -->
+        <mxCell id="conn-alb-std" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#ff9900;fontSize=11;dashed=1;" edge="1" parent="1" source="alb" target="standard-target-group">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        
+        <!-- Connection: Spot Target Group to Spot Service -->
+        <mxCell id="conn-spot-tg" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#009900;fontSize=11;" edge="1" parent="1" source="spot-target-group" target="fargate-spot-service">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        
+        <!-- Connection: Standard Target Group to Standard Service -->
+        <mxCell id="conn-std-tg" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#ff9900;fontSize=11;dashed=1;" edge="1" parent="1" source="standard-target-group" target="fargate-standard-service">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        
+        <!-- Connection: EventBridge to Spot Error Detector -->
+        <mxCell id="conn-eb-detector" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#E7157B;fontSize=10;entryX=0;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;" edge="1" parent="1" source="eventbridge" target="spot-error-detector">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        
+        <!-- Connection: EventBridge to Spot Success Monitor -->
+        <mxCell id="conn-eb-monitor" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#E7157B;fontSize=10;entryX=0;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;" edge="1" parent="1" source="eventbridge" target="spot-success-monitor">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        
+        <!-- Connection: Spot Error Detector to DynamoDB -->
+        <mxCell id="conn-detector-ddb" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#C925D1;fontSize=10;" edge="1" parent="1" source="spot-error-detector" target="dynamodb">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        
+        <!-- Connection: Spot Error Detector to Failback Orchestrator -->
+        <mxCell id="conn-detector-failback" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#D05C17;fontSize=10;dashed=1;label=Invoke;labelPosition=center;verticalLabelPosition=top;align=center;verticalAlign=bottom;" edge="1" parent="1" source="spot-error-detector" target="failback-orchestrator">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        
+        <!-- Connection: Failback Orchestrator to Fargate Standard -->
+        <mxCell id="conn-failback-std" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#D05C17;fontSize=10;exitX=0.5;exitY=0;exitDx=0;exitDy=0;exitPerimeter=0;" edge="1" parent="1" source="failback-orchestrator" target="fargate-standard-service">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        
+        <!-- Connection: Failback Orchestrator to Fargate Spot (Stop) -->
+        <mxCell id="conn-failback-spot" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#cc0000;fontSize=10;dashed=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;exitPerimeter=0;label=Stop;labelPosition=left;verticalLabelPosition=middle;align=right;verticalAlign=middle;" edge="1" parent="1" source="failback-orchestrator" target="fargate-spot-service">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        
+        <!-- Connection: Spot Success Monitor to DynamoDB -->
+        <mxCell id="conn-monitor-ddb" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#C925D1;fontSize=10;" edge="1" parent="1" source="spot-success-monitor" target="dynamodb">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        
+        <!-- Connection: Spot Success Monitor to Cleanup Orchestrator -->
+        <mxCell id="conn-monitor-cleanup" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#D05C17;fontSize=10;dashed=1;label=Invoke;labelPosition=center;verticalLabelPosition=top;align=center;verticalAlign=bottom;" edge="1" parent="1" source="spot-success-monitor" target="cleanup-orchestrator">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        
+        <!-- Connection: Cleanup Orchestrator to Fargate Spot -->
+        <mxCell id="conn-cleanup-spot" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#009900;fontSize=10;exitX=0.5;exitY=0;exitDx=0;exitDy=0;exitPerimeter=0;label=Start;labelPosition=right;verticalLabelPosition=middle;align=left;verticalAlign=middle;" edge="1" parent="1" source="cleanup-orchestrator" target="fargate-spot-service">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        
+        <!-- Connection: Cleanup Orchestrator to Fargate Standard (Stop) -->
+        <mxCell id="conn-cleanup-std" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#cc0000;fontSize=10;dashed=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;exitPerimeter=0;label=Stop;labelPosition=left;verticalLabelPosition=middle;align=right;verticalAlign=middle;" edge="1" parent="1" source="cleanup-orchestrator" target="fargate-standard-service">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        
+        <!-- Connection: Lambda to SNS -->
+        <mxCell id="conn-lambda-sns" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#FF4F8B;fontSize=10;exitX=1;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;" edge="1" parent="1" source="failback-orchestrator" target="sns">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        
+        <!-- Connection: Lambda to CloudWatch Logs -->
+        <mxCell id="conn-lambda-cw" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#E7157B;fontSize=10;dashed=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;" edge="1" parent="1" source="spot-error-detector" target="cloudwatch">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1130" y="860" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
