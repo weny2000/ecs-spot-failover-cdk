@@ -81,11 +81,10 @@ export class EcsFargateSpotFailoverStack extends cdk.Stack {
     const dynamoDbTtlDays = props?.dynamoDbTtlDays ?? 30;
 
     // ==========================================
-    // VPC
+    // VPC - Use explicit VPC ID to avoid lookup issues
     // ==========================================
-    const vpc = new ec2.Vpc(this, 'FargateSpotVpc', {
-      maxAzs: 2,
-      natGateways: 1,
+    const vpc = ec2.Vpc.fromLookup(this, 'DefaultVpc', { 
+      vpcId: 'vpc-3005d857',  // Default VPC in ap-northeast-1
     });
 
     // ==========================================
@@ -96,17 +95,20 @@ export class EcsFargateSpotFailoverStack extends cdk.Stack {
       clusterName: 'fargate-spot-cluster',
     });
 
-    // Enable Fargate and Fargate Spot capacity providers
-    cluster.addDefaultCapacityProviderStrategy([
+    // Enable Fargate and Fargate Spot capacity providers (AWS managed)
+    // Using CfnCluster to configure capacity providers
+    const cfnCluster = cluster.node.defaultChild as ecs.CfnCluster;
+    cfnCluster.addPropertyOverride('CapacityProviders', ['FARGATE', 'FARGATE_SPOT']);
+    cfnCluster.addPropertyOverride('DefaultCapacityProviderStrategy', [
       {
-        capacityProvider: 'FARGATE',
-        weight: 1,
-        base: 0,
+        CapacityProvider: 'FARGATE',
+        Weight: 1,
+        Base: 0,
       },
       {
-        capacityProvider: 'FARGATE_SPOT',
-        weight: 3,
-        base: 0,
+        CapacityProvider: 'FARGATE_SPOT',
+        Weight: 3,
+        Base: 0,
       },
     ]);
 
@@ -122,9 +124,11 @@ export class EcsFargateSpotFailoverStack extends cdk.Stack {
       timeToLiveAttribute: 'ttl', // Enable TTL with attribute name 'ttl'
     });
 
-    // Add local secondary index for querying by last error time
-    errorCounterTable.addLocalSecondaryIndex({
+    // Add global secondary index for querying by last error time
+    // Using GSI instead of LSI because the table does not have a sort key
+    errorCounterTable.addGlobalSecondaryIndex({
       indexName: 'last-error-time-index',
+      partitionKey: { name: 'service_name', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'last_error_time', type: dynamodb.AttributeType.STRING },
     });
 
@@ -397,29 +401,6 @@ export class EcsFargateSpotFailoverStack extends cdk.Stack {
       tracing: lambda.Tracing.ACTIVE,
     });
 
-    // Lambda function: PENDING task monitor (proactive monitoring)
-    const pendingTaskMonitor = new lambda.Function(this, 'PendingTaskMonitor', {
-      runtime: lambda.Runtime.NODEJS_18_X,
-      handler: 'pending-task-monitor.handler',
-      code: lambda.Code.fromAsset('lib/lambda'),
-      role: lambdaExecutionRole,
-      environment: {
-        ERROR_COUNTER_TABLE: errorCounterTable.tableName,
-        NOTIFICATION_TOPIC_ARN: notificationTopic.topicArn,
-        CLUSTER_NAME: cluster.clusterName,
-        SPOT_SERVICE_NAME: createSampleApp ? this.spotService!.serviceName : 'sample-app',
-        FAILOVER_STATE_MACHINE_ARN: failoverStateMachine.stateMachineArn,
-        CLOUDWATCH_NAMESPACE: 'ECS/FargateSpotFailover',
-        PENDING_TASK_TIMEOUT_MINUTES: '5',
-        FAILURE_THRESHOLD: '3',
-        AWS_XRAY_TRACING_NAME: 'PendingTaskMonitor',
-      },
-      timeout: cdk.Duration.seconds(30),
-      memorySize: 256,
-      tracing: lambda.Tracing.ACTIVE,
-      description: 'Monitors ECS tasks stuck in PENDING state to detect Spot capacity issues proactively',
-    });
-
     // ==========================================
     // EventBridge Rules
     // ==========================================
@@ -459,14 +440,6 @@ export class EcsFargateSpotFailoverStack extends cdk.Stack {
     // Add Lambda functions as targets for EventBridge rules
     ecsTaskStateChangeRule.addTarget(new targets.LambdaFunction(spotErrorDetector));
     ecsTaskRunningRule.addTarget(new targets.LambdaFunction(spotSuccessMonitor));
-
-    // EventBridge scheduled rule for PENDING task monitoring (every 1 minute)
-    const pendingTaskCheckRule = new events.Rule(this, 'PendingTaskCheckRule', {
-      ruleName: 'ecs-spot-pending-check',
-      description: 'Periodically check for ECS tasks stuck in PENDING state',
-      schedule: events.Schedule.rate(cdk.Duration.minutes(1)),
-    });
-    pendingTaskCheckRule.addTarget(new targets.LambdaFunction(pendingTaskMonitor));
 
     // ==========================================
     // CloudWatch Dashboard
@@ -689,7 +662,8 @@ export class EcsFargateSpotFailoverStack extends cdk.Stack {
           },
         ],
         securityGroups: [serviceSecurityGroup],
-        assignPublicIp: false,
+        assignPublicIp: true,
+        vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
         healthCheckGracePeriod: cdk.Duration.seconds(60),
         circuitBreaker: {
           rollback: true,
@@ -714,7 +688,8 @@ export class EcsFargateSpotFailoverStack extends cdk.Stack {
           },
         ],
         securityGroups: [serviceSecurityGroup],
-        assignPublicIp: false,
+        assignPublicIp: true,
+        vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
         healthCheckGracePeriod: cdk.Duration.seconds(60),
         circuitBreaker: {
           rollback: true,
@@ -756,11 +731,14 @@ export class EcsFargateSpotFailoverStack extends cdk.Stack {
         deregistrationDelay: cdk.Duration.seconds(30),
       });
 
-      // Attach services to target groups
+      // Attach Spot service to target group
       spotTargetGroup.addTarget(spotService);
-      standardTargetGroup.addTarget(standardService);
+      // Note: Standard service is not attached to target group initially
+      // It will be attached when failover is triggered via Lambda
 
       // NLB Listener - TCP protocol for maximum performance
+      // Only Spot target group is attached to listener initially
+      // Standard service will be started on failover via Lambda
       const listener = networkLB.addListener('TCPListener', {
         port: appPort,
         protocol: nlb.Protocol.TCP,
@@ -790,6 +768,38 @@ export class EcsFargateSpotFailoverStack extends cdk.Stack {
         description: 'Standard Fargate Service Name',
       });
     }
+
+    // Lambda function: PENDING task monitor (proactive monitoring)
+    // Moved here to ensure this.spotService is initialized before use
+    const pendingTaskMonitor = new lambda.Function(this, 'PendingTaskMonitor', {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: 'pending-task-monitor.handler',
+      code: lambda.Code.fromAsset('lib/lambda'),
+      role: lambdaExecutionRole,
+      environment: {
+        ERROR_COUNTER_TABLE: errorCounterTable.tableName,
+        NOTIFICATION_TOPIC_ARN: notificationTopic.topicArn,
+        CLUSTER_NAME: cluster.clusterName,
+        SPOT_SERVICE_NAME: createSampleApp ? this.spotService!.serviceName : 'sample-app',
+        FAILOVER_STATE_MACHINE_ARN: failoverStateMachine.stateMachineArn,
+        CLOUDWATCH_NAMESPACE: 'ECS/FargateSpotFailover',
+        PENDING_TASK_TIMEOUT_MINUTES: '5',
+        FAILURE_THRESHOLD: '3',
+        AWS_XRAY_TRACING_NAME: 'PendingTaskMonitor',
+      },
+      timeout: cdk.Duration.seconds(30),
+      memorySize: 256,
+      tracing: lambda.Tracing.ACTIVE,
+      description: 'Monitors ECS tasks stuck in PENDING state to detect Spot capacity issues proactively',
+    });
+
+    // EventBridge scheduled rule for PENDING task monitoring (every 1 minute)
+    const pendingTaskCheckRule = new events.Rule(this, 'PendingTaskCheckRule', {
+      ruleName: 'ecs-spot-pending-check',
+      description: 'Periodically check for ECS tasks stuck in PENDING state',
+      schedule: events.Schedule.rate(cdk.Duration.minutes(1)),
+    });
+    pendingTaskCheckRule.addTarget(new targets.LambdaFunction(pendingTaskMonitor));
 
     // ==========================================
     // Outputs

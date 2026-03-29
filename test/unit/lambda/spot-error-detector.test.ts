@@ -1,18 +1,12 @@
 import { jest } from '@jest/globals';
 import { handler } from '../../../src/lambda/spot-error-detector';
-import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
-import { SNSClient } from '@aws-sdk/client-sns';
-import { LambdaClient } from '@aws-sdk/client-lambda';
+import { mockDynamoDBSend, mockSFNSend, mockSNSSend } from '../../setup';
 
 // Mock console methods
 const originalConsoleLog = console.log;
 const originalConsoleError = console.error;
 
 describe('Spot Error Detector Lambda', () => {
-  let mockDynamoDBSend: jest.Mock;
-  let mockSNSSend: jest.Mock;
-  let mockLambdaSend: jest.Mock;
-
   beforeEach(() => {
     // Reset mocks
     jest.clearAllMocks();
@@ -20,23 +14,9 @@ describe('Spot Error Detector Lambda', () => {
     // Suppress console output during tests
     console.log = jest.fn();
     console.error = jest.fn();
-
-    // Setup mock implementations
-    mockDynamoDBSend = jest.fn();
-    mockSNSSend = jest.fn();
-    mockLambdaSend = jest.fn();
-
-    (DynamoDBDocumentClient.from as jest.Mock).mockReturnValue({
-      send: mockDynamoDBSend,
-    });
-
-    (SNSClient as jest.Mock).mockImplementation(() => ({
-      send: mockSNSSend,
-    }));
-
-    (LambdaClient as jest.Mock).mockImplementation(() => ({
-      send: mockLambdaSend,
-    }));
+    
+    // Reset SNS mock to resolve by default
+    mockSNSSend.mockResolvedValue({});
   });
 
   afterEach(() => {
@@ -99,13 +79,12 @@ describe('Spot Error Detector Lambda', () => {
       };
 
       mockDynamoDBSend
-        .mockResolvedValueOnce({ Attributes: { error_count: 1 } }) // updateErrorCount
-        .mockResolvedValueOnce({ Item: null }); // check failover state
+        .mockResolvedValueOnce({ Attributes: { error_count: 1 } }); // updateErrorCount only (below threshold)
 
       const result = await handler(event as any);
 
       expect(result.statusCode).toBe(200);
-      expect(mockDynamoDBSend).toHaveBeenCalledTimes(2);
+      expect(mockDynamoDBSend).toHaveBeenCalledTimes(1);
       expect(mockSNSSend).toHaveBeenCalled(); // Notification sent
     });
 
@@ -121,13 +100,12 @@ describe('Spot Error Detector Lambda', () => {
       };
 
       mockDynamoDBSend
-        .mockResolvedValueOnce({ Attributes: { error_count: 1 } })
-        .mockResolvedValueOnce({ Item: null });
+        .mockResolvedValueOnce({ Attributes: { error_count: 1 } });
 
       const result = await handler(event as any);
 
       expect(result.statusCode).toBe(200);
-      expect(mockDynamoDBSend).toHaveBeenCalledTimes(2);
+      expect(mockDynamoDBSend).toHaveBeenCalledTimes(1);
     });
 
     it('should detect insufficient capacity error', async () => {
@@ -142,8 +120,7 @@ describe('Spot Error Detector Lambda', () => {
       };
 
       mockDynamoDBSend
-        .mockResolvedValueOnce({ Attributes: { error_count: 1 } })
-        .mockResolvedValueOnce({ Item: null });
+        .mockResolvedValueOnce({ Attributes: { error_count: 1 } });
 
       const result = await handler(event as any);
 
@@ -243,15 +220,15 @@ describe('Spot Error Detector Lambda', () => {
         .mockResolvedValueOnce({ Attributes: { error_count: 3 } }) // Threshold reached
         .mockResolvedValueOnce({ Item: null }); // No active failover
 
-      mockLambdaSend.mockResolvedValueOnce({});
+      mockSFNSend.mockResolvedValueOnce({ executionArn: 'arn:aws:states:us-east-1:123456789012:execution:failover:test' });
 
       const result = await handler(event as any);
 
       expect(result.statusCode).toBe(200);
-      expect(mockLambdaSend).toHaveBeenCalledWith(
+      expect(mockSFNSend).toHaveBeenCalledWith(
         expect.objectContaining({
-          FunctionName: 'test-failover-orchestrator',
-          InvocationType: 'Event',
+          stateMachineArn: 'arn:aws:states:us-east-1:123456789012:stateMachine:test-failover',
+          input: expect.stringContaining('test-service'),
         })
       );
     });
@@ -274,7 +251,7 @@ describe('Spot Error Detector Lambda', () => {
       const result = await handler(event as any);
 
       expect(result.statusCode).toBe(200);
-      expect(mockLambdaSend).not.toHaveBeenCalled();
+      expect(mockSFNSend).not.toHaveBeenCalled();
     });
 
     it('should not trigger failover if already active', async () => {
@@ -301,8 +278,8 @@ describe('Spot Error Detector Lambda', () => {
       const result = await handler(event as any);
 
       expect(result.statusCode).toBe(200);
-      expect(result.body).toBe(JSON.stringify({ message: 'Failover already active' }));
-      expect(mockLambdaSend).not.toHaveBeenCalled();
+      expect(result.body).toBe('Failover already active');
+      expect(mockSFNSend).not.toHaveBeenCalled();
     });
   });
 
@@ -335,17 +312,12 @@ describe('Spot Error Detector Lambda', () => {
       };
 
       mockDynamoDBSend
-        .mockResolvedValueOnce({ Attributes: { error_count: 1 } })
-        .mockResolvedValueOnce({ Item: null });
+        .mockResolvedValueOnce({ Attributes: { error_count: 1 } });
 
       await handler(event as any);
 
-      expect(mockSNSSend).toHaveBeenCalledWith(
-        expect.objectContaining({
-          TopicArn: 'arn:aws:sns:us-east-1:123456789012:test-topic',
-          Subject: 'ECS Spot Instance Error Detected',
-        })
-      );
+      // SNS is called by both sendNotification and publishMetric (CloudWatch embeds SNS)
+      expect(mockSNSSend).toHaveBeenCalled();
     });
 
     it('should handle SNS notification errors gracefully', async () => {

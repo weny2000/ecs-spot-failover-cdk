@@ -87,49 +87,33 @@ describe('EcsFargateSpotFailoverStack', () => {
   });
 
   describe('Lambda Functions', () => {
-    it('should create 4 Lambda functions', () => {
-      template.resourceCountIs('AWS::Lambda::Function', 4);
+    it('should create 3 Lambda functions', () => {
+      template.resourceCountIs('AWS::Lambda::Function', 3);
     });
 
     it('should create Spot Error Detector Lambda', () => {
       template.hasResourceProperties('AWS::Lambda::Function', {
         Handler: 'spot-error-detector.handler',
         Runtime: 'nodejs18.x',
-        Timeout: 300,
+        Timeout: 30,
         Environment: {
-          Variables: {
+          Variables: Match.objectLike({
             ERROR_COUNTER_TABLE: 'fargate-spot-error-counter',
             FAILURE_THRESHOLD: '3',
-          },
+          }),
         },
       });
     });
 
-    it('should create Fargate Failback Orchestrator Lambda', () => {
-      template.hasResourceProperties('AWS::Lambda::Function', {
-        Handler: 'fargate-failback-orchestrator.handler',
-        Runtime: 'nodejs18.x',
-        Timeout: 300,
-        Environment: {
-          Variables: {
-            ERROR_COUNTER_TABLE: 'fargate-spot-error-counter',
-            SERVICE_STABLE_TIMEOUT: '300',
-          },
-        },
+    it('should create Failover Step Functions state machine', () => {
+      template.hasResourceProperties('AWS::StepFunctions::StateMachine', {
+        StateMachineName: 'ecs-spot-failover-workflow',
       });
     });
 
-    it('should create Cleanup Orchestrator Lambda', () => {
-      template.hasResourceProperties('AWS::Lambda::Function', {
-        Handler: 'cleanup-orchestrator.handler',
-        Runtime: 'nodejs18.x',
-        Timeout: 300,
-        Environment: {
-          Variables: {
-            ERROR_COUNTER_TABLE: 'fargate-spot-error-counter',
-            CLEANUP_DELAY: '30',
-          },
-        },
+    it('should create Cleanup Step Functions state machine', () => {
+      template.hasResourceProperties('AWS::StepFunctions::StateMachine', {
+        StateMachineName: 'ecs-spot-cleanup-workflow',
       });
     });
 
@@ -137,12 +121,12 @@ describe('EcsFargateSpotFailoverStack', () => {
       template.hasResourceProperties('AWS::Lambda::Function', {
         Handler: 'spot-success-monitor.handler',
         Runtime: 'nodejs18.x',
-        Timeout: 300,
+        Timeout: 30,
         Environment: {
-          Variables: {
+          Variables: Match.objectLike({
             ERROR_COUNTER_TABLE: 'fargate-spot-error-counter',
             CLUSTER_NAME: 'fargate-spot-cluster',
-          },
+          }),
         },
       });
     });
@@ -211,12 +195,12 @@ describe('EcsFargateSpotFailoverStack', () => {
       });
     });
 
-    it('should have Lambda invoke permissions', () => {
+    it('should have Step Functions permissions', () => {
       template.hasResourceProperties('AWS::IAM::Policy', {
         PolicyDocument: {
           Statement: Match.arrayWith([
             Match.objectLike({
-              Action: 'lambda:InvokeFunction',
+              Action: 'states:StartExecution',
               Effect: 'Allow',
             }),
           ]),

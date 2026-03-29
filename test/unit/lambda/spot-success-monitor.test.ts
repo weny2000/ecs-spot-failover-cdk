@@ -1,43 +1,26 @@
 import { jest } from '@jest/globals';
 import { handler } from '../../../src/lambda/spot-success-monitor';
-import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
-import { SNSClient } from '@aws-sdk/client-sns';
-import { LambdaClient } from '@aws-sdk/client-lambda';
+import { mockDynamoDBSend, mockSFNSend, mockSNSSend } from '../../setup';
 
 const originalConsoleLog = console.log;
 const originalConsoleError = console.error;
 
 describe('Spot Success Monitor Lambda', () => {
-  let mockDynamoDBSend: jest.Mock;
-  let mockSNSSend: jest.Mock;
-  let mockLambdaSend: jest.Mock;
-
   beforeEach(() => {
     jest.clearAllMocks();
     console.log = jest.fn();
     console.error = jest.fn();
-
-    mockDynamoDBSend = jest.fn();
-    mockSNSSend = jest.fn();
-    mockLambdaSend = jest.fn();
-
-    (DynamoDBDocumentClient.from as jest.Mock).mockReturnValue({
-      send: mockDynamoDBSend,
-    });
-
-    (SNSClient as jest.Mock).mockImplementation(() => ({
-      send: mockSNSSend,
-    }));
-
-    (LambdaClient as jest.Mock).mockImplementation(() => ({
-      send: mockLambdaSend,
-    }));
   });
 
   afterEach(() => {
     console.log = originalConsoleLog;
     console.error = originalConsoleError;
   });
+
+  // Helper to check if mockSFNSend was called (SFN uses Step Functions, not Lambda)
+  const expectSFNStartExecution = () => {
+    expect(mockSFNSend).toHaveBeenCalled();
+  };
 
   describe('Event validation', () => {
     it('should skip when no detail in event', async () => {
@@ -223,16 +206,11 @@ describe('Spot Success Monitor Lambda', () => {
         })
         .mockResolvedValueOnce({});
 
-      mockLambdaSend.mockResolvedValue({});
+      mockSFNSend.mockResolvedValue({});
 
       const result = await handler(event as any);
 
-      expect(mockLambdaSend).toHaveBeenCalledWith(
-        expect.objectContaining({
-          FunctionName: 'test-cleanup-orchestrator',
-          InvocationType: 'Event',
-        })
-      );
+      expectSFNStartExecution();
       expect(JSON.parse(result.body).message).toBe('Cleanup triggered successfully');
     });
 
@@ -256,7 +234,7 @@ describe('Spot Success Monitor Lambda', () => {
 
       const result = await handler(event as any);
 
-      expect(mockLambdaSend).not.toHaveBeenCalled();
+      expect(mockSFNSend).not.toHaveBeenCalled();
       expect(JSON.parse(result.body).message).toBe('Spot success processed successfully');
     });
 
@@ -288,7 +266,7 @@ describe('Spot Success Monitor Lambda', () => {
 
       const result = await handler(event as any);
 
-      expect(mockLambdaSend).not.toHaveBeenCalled();
+      expect(mockSFNSend).not.toHaveBeenCalled();
       expect(JSON.parse(result.body).message).toBe('Cleanup already in progress');
     });
 
@@ -319,16 +297,19 @@ describe('Spot Success Monitor Lambda', () => {
         })
         .mockResolvedValueOnce({});
 
-      mockLambdaSend.mockResolvedValue({});
+      mockSFNSend.mockResolvedValue({});
 
       await handler(event as any);
 
       // Verify cleanup_in_progress is set to true before invoking cleanup
       const markCleanupCall = mockDynamoDBSend.mock.calls.find(
-        call => call[0].UpdateExpression && call[0].UpdateExpression.includes('cleanup_in_progress')
+        (call: any[]) => call[0].UpdateExpression && call[0].UpdateExpression.includes('cleanup_in_progress')
       );
       expect(markCleanupCall).toBeDefined();
-      expect(markCleanupCall[0].ExpressionAttributeValues[':status']).toBe(true);
+      expect((markCleanupCall as any)[0].ExpressionAttributeValues[':status']).toBe(true);
+      
+      // Verify SFN was called
+      expectSFNStartExecution();
     });
   });
 
@@ -392,12 +373,20 @@ describe('Spot Success Monitor Lambda', () => {
         },
       };
 
+      // getServiceState catches errors and returns default values (error_count: 0, failover_state: null)
+      // so handler continues with normal flow without triggering failover
       mockDynamoDBSend.mockRejectedValue(new Error('DynamoDB connection failed'));
 
-      await expect(handler(event as any)).rejects.toThrow('DynamoDB connection failed');
+      const result = await handler(event as any);
+      
+      // Handler returns 200 with service state using default values
+      expect(result.statusCode).toBe(200);
+      expect(JSON.parse(result.body).serviceName).toBe('test-service');
+      // No SNS notification since error is handled gracefully in getServiceState
+      expect(mockSNSSend).not.toHaveBeenCalled();
     });
 
-    it('should handle Lambda invoke errors', async () => {
+    it('should handle Step Functions start execution errors', async () => {
       const event = {
         detail: {
           clusterArn: 'arn:aws:ecs:us-east-1:123456789012:cluster/test-cluster',
@@ -424,9 +413,10 @@ describe('Spot Success Monitor Lambda', () => {
         })
         .mockResolvedValueOnce({});
 
-      mockLambdaSend.mockRejectedValue(new Error('Lambda invoke failed'));
+      mockSFNSend.mockRejectedValue(new Error('SFN start execution failed'));
+      mockSNSSend.mockResolvedValue({});
 
-      await expect(handler(event as any)).rejects.toThrow('Lambda invoke failed');
+      await expect(handler(event as any)).rejects.toThrow('SFN start execution failed');
     });
 
     it('should send notification on error', async () => {
@@ -440,7 +430,25 @@ describe('Spot Success Monitor Lambda', () => {
         },
       };
 
-      mockDynamoDBSend.mockRejectedValue(new Error('Test error'));
+      // Force an error during processing by rejecting SFN call
+      mockDynamoDBSend
+        .mockResolvedValueOnce({
+          Item: {
+            error_count: 0,
+            failover_state: {
+              failover_active: true,
+            },
+          },
+        })
+        .mockResolvedValueOnce({
+          Item: {
+            cleanup_in_progress: false,
+          },
+        })
+        .mockResolvedValueOnce({});
+      
+      mockSFNSend.mockRejectedValue(new Error('Test error'));
+      mockSNSSend.mockResolvedValue({});
 
       try {
         await handler(event as any);

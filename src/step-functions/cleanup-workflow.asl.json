@@ -40,7 +40,6 @@
       "Type": "Wait",
       "Comment": "Wait for Spot instances to stabilize before cleanup",
       "SecondsPath": "$.cleanupDelay",
-      "Default": 30,
       "Next": "StartSpotService"
     },
     "StartSpotService": {

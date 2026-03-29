@@ -34,6 +34,7 @@
     "predeploy": "npm run build"
   },
   "devDependencies": {
+    "@aws-sdk/client-xray": "^3.1006.0",
     "@types/aws-lambda": "^8.10.119",
     "@types/jest": "^29.5.5",
     "@types/node": "^20.6.0",
@@ -46,10 +47,9 @@
     "@aws-sdk/client-dynamodb": "^3.450.0",
     "@aws-sdk/client-ecs": "^3.450.0",
     "@aws-sdk/client-lambda": "^3.450.0",
-    "@aws-sdk/client-sns": "^3.450.0",
-    "@aws-sdk/client-sfn": "^3.450.0",
     "@aws-sdk/client-route-53": "^3.450.0",
-    "@aws-sdk/client-xray": "^3.450.0",
+    "@aws-sdk/client-sfn": "^3.450.0",
+    "@aws-sdk/client-sns": "^3.450.0",
     "@aws-sdk/lib-dynamodb": "^3.450.0",
     "aws-cdk-lib": "^2.100.0",
     "aws-xray-sdk-core": "^3.5.3",

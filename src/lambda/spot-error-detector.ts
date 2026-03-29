@@ -14,12 +14,28 @@ import { CloudWatchClient, PutMetricDataCommand } from '@aws-sdk/client-cloudwat
 // Note: @aws-sdk/client-xray is aws-xray-sdk-core in Lambda runtime
 import * as AWSXRay from 'aws-xray-sdk-core';
 
-// Enable X-Ray tracing for AWS SDK v3 clients
-const dynamodbClient = AWSXRay.captureAWSv3Client(new DynamoDBClient({}));
-const dynamodb = DynamoDBDocumentClient.from(dynamodbClient);
-const snsClient = AWSXRay.captureAWSv3Client(new SNSClient({}));
-const sfnClient = AWSXRay.captureAWSv3Client(new SFNClient({}));
-const cloudWatchClient = AWSXRay.captureAWSv3Client(new CloudWatchClient({}));
+// Lazy initialization of AWS clients for testability
+let dynamodb: DynamoDBDocumentClient;
+let snsClient: SNSClient;
+let sfnClient: SFNClient;
+let cloudWatchClient: CloudWatchClient;
+
+function getClients() {
+  if (!dynamodb) {
+    const dynamodbClient = AWSXRay.captureAWSv3Client(new DynamoDBClient({}));
+    dynamodb = DynamoDBDocumentClient.from(dynamodbClient);
+  }
+  if (!snsClient) {
+    snsClient = AWSXRay.captureAWSv3Client(new SNSClient({}));
+  }
+  if (!sfnClient) {
+    sfnClient = AWSXRay.captureAWSv3Client(new SFNClient({}));
+  }
+  if (!cloudWatchClient) {
+    cloudWatchClient = AWSXRay.captureAWSv3Client(new CloudWatchClient({}));
+  }
+  return { dynamodb, snsClient, sfnClient, cloudWatchClient };
+}
 
 // Environment variables
 const ERROR_COUNTER_TABLE = process.env.ERROR_COUNTER_TABLE || '';
@@ -94,6 +110,7 @@ async function sendNotification(subject: string, message: string): Promise<void>
 
   const subsegment = AWSXRay.getSegment()?.addNewSubsegment('sendNotification');
   try {
+    const { snsClient } = getClients();
     await snsClient.send(new PublishCommand({
       TopicArn: NOTIFICATION_TOPIC_ARN,
       Subject: subject,
@@ -125,6 +142,7 @@ async function publishMetric(
   subsegment?.addMetadata('value', value);
 
   try {
+    const { cloudWatchClient } = getClients();
     await cloudWatchClient.send(new PutMetricDataCommand({
       Namespace: NAMESPACE,
       MetricData: [{
@@ -167,6 +185,7 @@ async function updateErrorCount(serviceName: string): Promise<number> {
   const ttl = calculateTTL(30); // 30 days TTL
 
   try {
+    const { dynamodb } = getClients();
     const result = await dynamodb.send(new UpdateCommand({
       TableName: ERROR_COUNTER_TABLE,
       Key: { service_name: serviceName },
@@ -213,6 +232,7 @@ async function getErrorCount(serviceName: string): Promise<number> {
   subsegment?.addMetadata('serviceName', serviceName);
 
   try {
+    const { dynamodb } = getClients();
     const result = await dynamodb.send(new GetCommand({
       TableName: ERROR_COUNTER_TABLE,
       Key: { service_name: serviceName }
@@ -249,6 +269,7 @@ async function triggerFailover(serviceName: string, clusterArn: string | undefin
 
     const clusterName = clusterArn ? clusterArn.split('/').pop() : process.env.CLUSTER_NAME;
 
+    const { sfnClient } = getClients();
     await sfnClient.send(new StartExecutionCommand({
       stateMachineArn: stateMachineArn,
       input: JSON.stringify({
@@ -356,7 +377,8 @@ export const handler = async (event: LambdaEvent): Promise<LambdaResponse> => {
       console.log(`Error count (${errorCount}) reached threshold (${FAILURE_THRESHOLD}), triggering failover`);
 
       // Check if already in failover state
-      const existingState = await dynamodb.send(new GetCommand({
+      const { dynamodb: db } = getClients();
+      const existingState = await db.send(new GetCommand({
         TableName: ERROR_COUNTER_TABLE,
         Key: { service_name: serviceName }
       }));

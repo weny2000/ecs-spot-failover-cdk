@@ -94,6 +94,19 @@ export const DEFAULT_REGION_CONFIG: Record<string, RegionConfig> = {
       replicateDynamoDB: true,
     },
   },
+  'ap-northeast-1': {
+    region: 'ap-northeast-1',
+    name: 'Asia Pacific (Tokyo)',
+    type: 'primary',
+    vpcCidr: '10.4.0.0/16',
+    azCount: 2,
+    capacityProviderWeights: {
+      fargate: 1,
+      fargateSpot: 3,
+    },
+    sampleAppDesiredCount: 2,
+    enabled: true,
+  },
 };
 
 /**
